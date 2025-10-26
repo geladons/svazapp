@@ -83,7 +83,7 @@ If you prefer to install manually or need more control:
 - Docker Engine 24.0+
 - Docker Compose 2.20+
 - A domain name with DNS pointing to your server
-- Ports 80, 443, 3478, 5349 open on your firewall
+- Ports 80, 443, 3478, 49152-65535 open on your firewall (see [PORTS.md](./PORTS.md))
 
 **Steps**:
 
@@ -114,6 +114,48 @@ docker compose up -d
 5. Access your instance at `https://your-domain.com`
 
 For complete manual installation guide, see [DEPLOYMENT.md](./DEPLOYMENT.md).
+
+---
+
+## 🔌 Network & Configuration
+
+### Required Ports
+
+svaz.app requires the following ports to be open in your firewall:
+
+| Port | Protocol | Purpose | Required |
+|------|----------|---------|----------|
+| **80** | TCP | HTTP (SSL validation) | ✅ Yes |
+| **443** | TCP | HTTPS (main app) | ✅ Yes |
+| **3478** | UDP/TCP | STUN/TURN (WebRTC) | ✅ Yes |
+| **49152-65535** | UDP | TURN relay (WebRTC) | ✅ Yes |
+
+**All ports are configurable** - see [PORTS.md](./PORTS.md) for details.
+
+### Using External Reverse Proxy
+
+Already have Nginx Proxy Manager, Traefik, or Nginx? You can use it instead of Caddy:
+
+- ✅ Reuse existing SSL certificates
+- ✅ No port 80/443 conflicts
+- ✅ Centralized proxy management
+
+See [DEPLOYMENT.md - Using External Reverse Proxy](./DEPLOYMENT.md#using-external-reverse-proxy) for setup instructions.
+
+### Environment Variables
+
+All configuration is done via `.env` file. Key variables you **MUST** change:
+
+- `DOMAIN` - Your domain name
+- `SSL_EMAIL` - Your email for SSL certificates
+- `POSTGRES_PASSWORD` - Database password
+- `JWT_SECRET` - JWT signing key
+- `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` - LiveKit credentials
+- `COTURN_PASSWORD` - TURN server password
+
+See [ENV_VARIABLES.md](./ENV_VARIABLES.md) for complete reference with examples.
+
+---
 
 ## 📱 Features
 
@@ -215,12 +257,17 @@ npm run dev
 
 ## 📖 Documentation
 
+### Getting Started
+- [Deployment Guide](./DEPLOYMENT.md) - Production deployment instructions
+- [Development Guide](./DEVELOPMENT.md) - Local development setup and workflows
+- [Port Configuration](./PORTS.md) - Network ports and firewall setup
+- [Environment Variables](./ENV_VARIABLES.md) - Complete .env reference
+
+### Architecture & Design
 - [Design Philosophy](./design.md) - Core principles and architecture decisions
 - [Technical Architecture](./tech_stack.md) - Detailed technology stack
 - [User Flows](./User_flow.md) - User interaction flows and scenarios
 - [Development Rules](./rules.md) - Coding standards and conventions
-- [Deployment Guide](./DEPLOYMENT.md) - Production deployment instructions
-- [Development Guide](./DEVELOPMENT.md) - Local development setup and workflows
 
 ## 🔒 Security
 
@@ -250,19 +297,26 @@ docker compose logs -f frontend
 ## 🆘 Troubleshooting
 
 ### SSL Certificate Issues
-- Ensure ports 80 and 443 are open
+- Ensure ports 80 and 443 are open (see [PORTS.md](./PORTS.md))
 - Verify DNS A record points to your server IP
 - Check Caddy logs: `docker compose logs caddy`
+- For external reverse proxy setup, see [DEPLOYMENT.md](./DEPLOYMENT.md#using-external-reverse-proxy)
 
 ### Database Connection Issues
-- Verify DATABASE_URL in .env
+- Verify DATABASE_URL in .env (see [ENV_VARIABLES.md](./ENV_VARIABLES.md))
 - Check if db service is running: `docker compose ps db`
 - Restart API: `docker compose restart api`
 
 ### Services Not Starting
 - Check Docker logs: `docker compose logs`
-- Verify .env file exists and has correct values
-- Ensure no port conflicts on host machine
+- Verify .env file exists and has correct values (see [ENV_VARIABLES.md](./ENV_VARIABLES.md))
+- Ensure no port conflicts on host machine (see [PORTS.md](./PORTS.md))
+
+### Port Conflicts
+- See [PORTS.md](./PORTS.md) for changing default ports
+- Consider using external reverse proxy (see [DEPLOYMENT.md](./DEPLOYMENT.md#using-external-reverse-proxy))
+
+For complete troubleshooting guide, see [DEPLOYMENT.md](./DEPLOYMENT.md#troubleshooting)
 
 ## 📄 License
 

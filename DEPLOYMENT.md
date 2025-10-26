@@ -455,6 +455,382 @@ crontab -e
 
 ---
 
+## Using External Reverse Proxy
+
+If you already have a reverse proxy (Nginx Proxy Manager, Traefik, Nginx, Apache), you can use it instead of Caddy.
+
+### Why Use External Reverse Proxy?
+
+- ✅ Reuse existing SSL certificates
+- ✅ Centralized proxy management for multiple applications
+- ✅ No port 80/443 conflicts
+- ✅ Easier multi-app hosting on same server
+- ✅ Use existing proxy features (authentication, caching, etc.)
+
+### Setup Steps
+
+#### 1. Disable Caddy Service
+
+Edit `docker-compose.yml` and comment out the Caddy service:
+
+```yaml
+# Comment out or remove the entire caddy service
+# caddy:
+#   build:
+#     context: ./caddy
+#     dockerfile: Dockerfile
+#   container_name: svazapp-caddy
+#   ...
+```
+
+#### 2. Expose Internal Ports
+
+Edit `docker-compose.yml` to expose internal ports to host:
+
+```yaml
+frontend:
+  # ... existing configuration ...
+  ports:
+    - '3000:3000'  # Add this line
+
+api:
+  # ... existing configuration ...
+  ports:
+    - '8080:8080'  # Add this line
+
+livekit:
+  # ... existing configuration ...
+  ports:
+    - '7880:7880'  # Add this line
+```
+
+#### 3. Update Environment Variables
+
+Edit `.env` file:
+
+```bash
+# Keep your domain
+DOMAIN=svaz.app
+
+# Remove or comment out SSL_EMAIL (not needed)
+# SSL_EMAIL=admin@svaz.app
+
+# Update URLs to use external domain
+CORS_ORIGIN=https://svaz.app
+NEXT_PUBLIC_API_URL=https://svaz.app/api
+NEXT_PUBLIC_SOCKET_URL=https://svaz.app
+NEXT_PUBLIC_LIVEKIT_URL=wss://svaz.app/livekit
+```
+
+#### 4. Configure Your Reverse Proxy
+
+See specific instructions below for your proxy.
+
+#### 5. Restart Services
+
+```bash
+docker compose down
+docker compose build  # Rebuild with new environment variables
+docker compose up -d
+```
+
+### Nginx Proxy Manager (NPM)
+
+#### Create Proxy Hosts
+
+Create 3 proxy hosts in NPM:
+
+**1. Main Application (Frontend)**
+
+- **Domain Names**: `svaz.app`
+- **Scheme**: `http`
+- **Forward Hostname/IP**: `<your-server-ip>` or `localhost`
+- **Forward Port**: `3000`
+- **Cache Assets**: ✅ Enabled
+- **Block Common Exploits**: ✅ Enabled
+- **Websockets Support**: ✅ Enabled
+- **SSL**: ✅ Request a new SSL Certificate (Let's Encrypt)
+- **Force SSL**: ✅ Enabled
+- **HTTP/2 Support**: ✅ Enabled
+
+**2. API Backend**
+
+- **Domain Names**: `svaz.app`
+- **Scheme**: `http`
+- **Forward Hostname/IP**: `<your-server-ip>` or `localhost`
+- **Forward Port**: `8080`
+- **Advanced** tab:
+  ```nginx
+  location /api {
+      proxy_pass http://<your-server-ip>:8080;
+      proxy_http_version 1.1;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection 'upgrade';
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_cache_bypass $http_upgrade;
+  }
+
+  location /socket.io {
+      proxy_pass http://<your-server-ip>:8080;
+      proxy_http_version 1.1;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection 'upgrade';
+      proxy_set_header Host $host;
+      proxy_cache_bypass $http_upgrade;
+  }
+  ```
+- **Websockets Support**: ✅ Enabled
+- **SSL**: ✅ Use existing certificate (same as main app)
+
+**3. LiveKit WebSocket**
+
+- **Domain Names**: `svaz.app`
+- **Scheme**: `http`
+- **Forward Hostname/IP**: `<your-server-ip>` or `localhost`
+- **Forward Port**: `7880`
+- **Advanced** tab:
+  ```nginx
+  location /livekit {
+      proxy_pass http://<your-server-ip>:7880;
+      proxy_http_version 1.1;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection 'upgrade';
+      proxy_set_header Host $host;
+      proxy_cache_bypass $http_upgrade;
+  }
+  ```
+- **Websockets Support**: ✅ Enabled
+- **SSL**: ✅ Use existing certificate (same as main app)
+
+### Traefik
+
+Create `docker-compose.override.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  frontend:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.svazapp-frontend.rule=Host(`svaz.app`)"
+      - "traefik.http.routers.svazapp-frontend.entrypoints=websecure"
+      - "traefik.http.routers.svazapp-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.svazapp-frontend.loadbalancer.server.port=3000"
+
+  api:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.svazapp-api.rule=Host(`svaz.app`) && PathPrefix(`/api`, `/socket.io`)"
+      - "traefik.http.routers.svazapp-api.entrypoints=websecure"
+      - "traefik.http.routers.svazapp-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.svazapp-api.loadbalancer.server.port=8080"
+
+  livekit:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.svazapp-livekit.rule=Host(`svaz.app`) && PathPrefix(`/livekit`)"
+      - "traefik.http.routers.svazapp-livekit.entrypoints=websecure"
+      - "traefik.http.routers.svazapp-livekit.tls.certresolver=letsencrypt"
+      - "traefik.http.services.svazapp-livekit.loadbalancer.server.port=7880"
+
+networks:
+  default:
+    external:
+      name: traefik-network
+```
+
+### Nginx (Manual Configuration)
+
+Create `/etc/nginx/sites-available/svazapp`:
+
+```nginx
+# Upstream definitions
+upstream svazapp_frontend {
+    server localhost:3000;
+}
+
+upstream svazapp_api {
+    server localhost:8080;
+}
+
+upstream svazapp_livekit {
+    server localhost:7880;
+}
+
+# HTTP to HTTPS redirect
+server {
+    listen 80;
+    server_name svaz.app;
+    return 301 https://$server_name$request_uri;
+}
+
+# HTTPS server
+server {
+    listen 443 ssl http2;
+    server_name svaz.app;
+
+    # SSL configuration
+    ssl_certificate /path/to/fullchain.pem;
+    ssl_certificate_key /path/to/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    # Security headers
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+
+    # Frontend (default location)
+    location / {
+        proxy_pass http://svazapp_frontend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # API
+    location /api {
+        proxy_pass http://svazapp_api;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # Socket.io
+    location /socket.io {
+        proxy_pass http://svazapp_api;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # LiveKit
+    location /livekit {
+        proxy_pass http://svazapp_livekit;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+Enable the site:
+
+```bash
+sudo ln -s /etc/nginx/sites-available/svazapp /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+### Apache (Manual Configuration)
+
+Enable required modules:
+
+```bash
+sudo a2enmod proxy proxy_http proxy_wstunnel ssl headers rewrite
+```
+
+Create `/etc/apache2/sites-available/svazapp.conf`:
+
+```apache
+<VirtualHost *:80>
+    ServerName svaz.app
+    Redirect permanent / https://svaz.app/
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName svaz.app
+
+    # SSL configuration
+    SSLEngine on
+    SSLCertificateFile /path/to/fullchain.pem
+    SSLCertificateKeyFile /path/to/privkey.pem
+    SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1
+    SSLCipherSuite HIGH:!aNULL:!MD5
+
+    # Security headers
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-Content-Type-Options "nosniff"
+
+    # Frontend
+    ProxyPreserveHost On
+    ProxyPass / http://localhost:3000/
+    ProxyPassReverse / http://localhost:3000/
+
+    # API
+    ProxyPass /api http://localhost:8080/api
+    ProxyPassReverse /api http://localhost:8080/api
+
+    # Socket.io (WebSocket)
+    RewriteEngine On
+    RewriteCond %{HTTP:Upgrade} =websocket [NC]
+    RewriteRule /socket.io/(.*) ws://localhost:8080/socket.io/$1 [P,L]
+    ProxyPass /socket.io http://localhost:8080/socket.io
+    ProxyPassReverse /socket.io http://localhost:8080/socket.io
+
+    # LiveKit (WebSocket)
+    RewriteCond %{HTTP:Upgrade} =websocket [NC]
+    RewriteRule /livekit/(.*) ws://localhost:7880/livekit/$1 [P,L]
+    ProxyPass /livekit http://localhost:7880/livekit
+    ProxyPassReverse /livekit http://localhost:7880/livekit
+</VirtualHost>
+```
+
+Enable the site:
+
+```bash
+sudo a2ensite svazapp
+sudo apache2ctl configtest
+sudo systemctl reload apache2
+```
+
+### Verification
+
+After configuring your reverse proxy:
+
+1. **Test HTTPS access**:
+   ```bash
+   curl -I https://svaz.app
+   ```
+
+2. **Test API**:
+   ```bash
+   curl https://svaz.app/api/health
+   ```
+
+3. **Test WebSocket** (in browser console):
+   ```javascript
+   const ws = new WebSocket('wss://svaz.app/livekit');
+   ws.onopen = () => console.log('Connected');
+   ```
+
+4. **Check SSL certificate**:
+   ```bash
+   openssl s_client -connect svaz.app:443 -servername svaz.app
+   ```
+
+---
+
 ## Troubleshooting
 
 ### SSL Certificate Issues
