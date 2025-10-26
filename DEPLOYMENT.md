@@ -29,13 +29,13 @@ The easiest way to deploy svaz.app is using the automated installation script.
 Run this single command on your server:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yourusername/svazapp/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/geladons/svazapp/main/install.sh | bash
 ```
 
 Or with wget:
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/yourusername/svazapp/main/install.sh | bash
+wget -qO- https://raw.githubusercontent.com/geladons/svazapp/main/install.sh | bash
 ```
 
 ### What the Script Does
@@ -58,7 +58,7 @@ The installation script automatically:
 #### Basic Installation (Quick Setup)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yourusername/svazapp/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/geladons/svazapp/main/install.sh | bash
 ```
 
 The script will ask for:
@@ -70,7 +70,7 @@ All secrets and passwords will be auto-generated.
 #### Advanced Installation (Interactive)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yourusername/svazapp/main/install.sh | bash -s -- --advanced
+curl -fsSL https://raw.githubusercontent.com/geladons/svazapp/main/install.sh | bash -s -- --advanced
 ```
 
 Interactive mode allows you to:
@@ -81,7 +81,7 @@ Interactive mode allows you to:
 #### Custom Installation Directory
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yourusername/svazapp/main/install.sh | bash -s -- --dir /custom/path
+curl -fsSL https://raw.githubusercontent.com/geladons/svazapp/main/install.sh | bash -s -- --dir /custom/path
 ```
 
 Default installation directory is `/opt/svazapp`.
@@ -89,7 +89,7 @@ Default installation directory is `/opt/svazapp`.
 #### Unattended Installation (CI/CD)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yourusername/svazapp/main/install.sh | bash -s -- \
+curl -fsSL https://raw.githubusercontent.com/geladons/svazapp/main/install.sh | bash -s -- \
   --yes \
   --domain svaz.app \
   --email admin@svaz.app \
@@ -209,7 +209,7 @@ newgrp docker
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/svazapp.git
+git clone https://github.com/geladons/svazapp.git
 cd svazapp
 ```
 

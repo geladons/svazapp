@@ -45,7 +45,7 @@ You can use the automated installation script to set up a development environmen
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/svazapp.git
+git clone https://github.com/geladons/svazapp.git
 cd svazapp
 
 # Run installation script (will set up all services)
@@ -75,7 +75,7 @@ docker compose up -d db livekit coturn
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/svazapp.git
+git clone https://github.com/geladons/svazapp.git
 cd svazapp
 ```
 

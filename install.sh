@@ -6,8 +6,8 @@
 # One-command installation for svaz.app - Self-hosted video calling platform
 # 
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/yourusername/svazapp/main/install.sh | bash
-#   wget -qO- https://raw.githubusercontent.com/yourusername/svazapp/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/geladons/svazapp/main/install.sh | bash
+#   wget -qO- https://raw.githubusercontent.com/geladons/svazapp/main/install.sh | bash
 #
 # Options:
 #   --advanced          Interactive mode with all configuration options
@@ -385,7 +385,7 @@ clone_repository() {
     mkdir -p "$(dirname "${INSTALL_DIR}")"
 
     # Clone repository
-    git clone https://github.com/yourusername/svazapp.git "${INSTALL_DIR}" 2>&1 | tee -a "${LOG_FILE}"
+    git clone https://github.com/geladons/svazapp.git "${INSTALL_DIR}" 2>&1 | tee -a "${LOG_FILE}"
 
     cd "${INSTALL_DIR}"
 
@@ -717,7 +717,7 @@ print_final_report() {
     echo "      cd ${INSTALL_DIR} && docker compose logs"
     echo ""
     echo "   For more help, visit:"
-    echo "      https://github.com/yourusername/svazapp/issues"
+    echo "      https://github.com/geladons/svazapp/issues"
     echo ""
     echo "═══════════════════════════════════════════════════════════════════════════"
     echo ""

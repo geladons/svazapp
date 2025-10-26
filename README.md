@@ -29,13 +29,13 @@ The system consists of 6 services orchestrated by docker-compose:
 Install svaz.app on any Linux server or macOS with a single command:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yourusername/svazapp/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/geladons/svazapp/main/install.sh | bash
 ```
 
 Or with wget:
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/yourusername/svazapp/main/install.sh | bash
+wget -qO- https://raw.githubusercontent.com/geladons/svazapp/main/install.sh | bash
 ```
 
 The installation script will:
@@ -59,16 +59,16 @@ The installation script will:
 
 ```bash
 # Advanced installation (interactive configuration)
-curl -fsSL https://raw.githubusercontent.com/yourusername/svazapp/main/install.sh | bash -s -- --advanced
+curl -fsSL https://raw.githubusercontent.com/geladons/svazapp/main/install.sh | bash -s -- --advanced
 
 # Custom installation directory
-curl -fsSL https://raw.githubusercontent.com/yourusername/svazapp/main/install.sh | bash -s -- --dir /custom/path
+curl -fsSL https://raw.githubusercontent.com/geladons/svazapp/main/install.sh | bash -s -- --dir /custom/path
 
 # Unattended installation (skip confirmations)
-curl -fsSL https://raw.githubusercontent.com/yourusername/svazapp/main/install.sh | bash -s -- --yes
+curl -fsSL https://raw.githubusercontent.com/geladons/svazapp/main/install.sh | bash -s -- --yes
 
 # Specify domain and email
-curl -fsSL https://raw.githubusercontent.com/yourusername/svazapp/main/install.sh | bash -s -- --domain svaz.app --email admin@svaz.app
+curl -fsSL https://raw.githubusercontent.com/geladons/svazapp/main/install.sh | bash -s -- --domain svaz.app --email admin@svaz.app
 ```
 
 For detailed installation instructions and manual setup, see [DEPLOYMENT.md](./DEPLOYMENT.md).
@@ -89,7 +89,7 @@ If you prefer to install manually or need more control:
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/svazapp.git
+git clone https://github.com/geladons/svazapp.git
 cd svazapp
 ```
 
