@@ -1,0 +1,46 @@
+# =============================================================================
+# LIVEKIT SERVER CONFIGURATION
+# =============================================================================
+# SFU server for group video calls and guest links
+# =============================================================================
+
+port: 7880
+bind_addresses:
+  - "0.0.0.0"
+
+# RTC Configuration
+rtc:
+  # Port range for WebRTC
+  port_range_start: 50000
+  port_range_end: 60000
+
+  # Use mDNS for local development
+  use_external_ip: true
+
+# Redis (not used in this setup, but required by config)
+redis: {}
+
+# API Keys
+# These will be replaced by the installation script
+keys:
+  {LIVEKIT_API_KEY}: {LIVEKIT_API_SECRET}
+
+# Logging
+logging:
+  level: info
+  sample: false
+
+# Room settings
+room:
+  # Auto-create rooms
+  auto_create: true
+
+  # Room timeout (empty room cleanup)
+  empty_timeout: 300 # 5 minutes
+
+  # Max participants per room
+  max_participants: 10
+
+# Webhook (not used initially)
+webhook: {}
+

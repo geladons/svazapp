@@ -1,0 +1,43 @@
+# =============================================================================
+# CADDY CONFIGURATION FOR SVAZ.APP
+# =============================================================================
+# This is the default configuration used before admin setup
+# After setup, this will be replaced with domain-specific configuration
+# =============================================================================
+
+{
+	# Admin API for dynamic configuration
+	admin 0.0.0.0:2019
+
+	# Disable automatic HTTPS for local development
+	auto_https off
+}
+
+# Main server block
+:80 {
+	# API routes
+	handle /api/* {
+		reverse_proxy api:8080
+	}
+
+	# Socket.io routes (for real-time communication)
+	handle /socket.io/* {
+		reverse_proxy api:8080
+	}
+
+	# LiveKit routes
+	handle /livekit/* {
+		reverse_proxy livekit:7880
+	}
+
+	# Health check endpoint
+	handle /health {
+		reverse_proxy api:8080
+	}
+
+	# Default: serve frontend
+	handle {
+		reverse_proxy frontend:3000
+	}
+}
+

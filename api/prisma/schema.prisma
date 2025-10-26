@@ -1,0 +1,258 @@
+// Prisma Schema for svaz.app
+// Database: PostgreSQL 16
+// Philosophy: Minimal server-side storage (Heavy Client, Light Backend)
+// Only stores: Users, Contacts, Call History
+// Chat history is NOT stored on server (lives in Dexie.js on client)
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model - Authentication and profile
+model User {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Authentication
+  email        String  @unique
+  passwordHash String
+  username     String  @unique
+  displayName  String?
+
+  // Profile
+  avatarUrl String?
+  bio       String?
+  phone     String? @unique
+
+  // Status tracking
+  isOnline      Boolean   @default(false)
+  lastSeenAt    DateTime  @default(now())
+  lastActiveAt  DateTime  @default(now())
+
+  // Relationships
+  contactsInitiated Contact[] @relation("ContactInitiator")
+  contactsReceived  Contact[] @relation("ContactReceiver")
+  callsInitiated    Call[]    @relation("CallInitiator")
+  callsReceived     Call[]    @relation("CallReceiver")
+  roomsCreated      Room[]    @relation("RoomCreator")
+  roomParticipants  RoomParticipant[]
+  chatsAsUser1      Chat[]    @relation("ChatUser1")
+  chatsAsUser2      Chat[]    @relation("ChatUser2")
+
+  @@index([email])
+  @@index([username])
+  @@index([phone])
+  @@index([isOnline])
+  @@map("users")
+}
+
+// Contact model - User relationships (friend list)
+model Contact {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationship
+  userId    String
+  contactId String
+
+  // Request tracking
+  requestedBy String // ID of the user who initiated the contact request
+
+  // Status
+  status ContactStatus @default(PENDING)
+
+  // Metadata
+  nickname String? // Custom name for this contact
+  isFavorite Boolean @default(false)
+  isBlocked  Boolean @default(false)
+
+  // Relations
+  user    User @relation("ContactInitiator", fields: [userId], references: [id], onDelete: Cascade)
+  contact User @relation("ContactReceiver", fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contactId])
+  @@index([userId])
+  @@index([contactId])
+  @@index([status])
+  @@index([requestedBy])
+  @@map("contacts")
+}
+
+enum ContactStatus {
+  PENDING   // Contact request sent, awaiting acceptance
+  ACCEPTED  // Contact accepted, can call/message
+  BLOCKED   // Contact blocked by user
+}
+
+// Call model - Call history (for "Calls" screen)
+model Call {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Participants
+  callerId   String
+  receiverId String
+
+  // Call metadata
+  type      CallType
+  status    CallStatus
+  direction CallDirection @default(OUTGOING)
+
+  // Timing
+  startedAt  DateTime?
+  endedAt    DateTime?
+  duration   Int?       @default(0) // Duration in seconds
+
+  // Mode tracking (for analytics/debugging)
+  mode CallMode @default(NORMAL)
+
+  // Room reference (for group calls)
+  roomId String?
+  room   Room?   @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
+  // Relations
+  caller   User @relation("CallInitiator", fields: [callerId], references: [id], onDelete: Cascade)
+  receiver User @relation("CallReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([callerId])
+  @@index([receiverId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("calls")
+}
+
+enum CallType {
+  AUDIO       // Audio-only call
+  VIDEO       // Video call
+  SCREEN      // Screen sharing
+}
+
+enum CallStatus {
+  RINGING     // Call initiated, waiting for answer
+  ANSWERED    // Call answered, in progress
+  ENDED       // Call ended normally
+  MISSED      // Call not answered (timeout)
+  REJECTED    // Call rejected by receiver
+  FAILED      // Call failed (technical error)
+  CANCELLED   // Call cancelled by caller before answer
+}
+
+enum CallDirection {
+  OUTGOING    // Call initiated by this user
+  INCOMING    // Call received by this user
+}
+
+enum CallMode {
+  NORMAL      // Call via server (Socket.io signaling)
+  EMERGENCY   // Call via P2P (webtorrent signaling)
+  ASYMMETRIC  // Mixed mode (one user Normal, one Emergency)
+}
+
+// Room model - Group call rooms (LiveKit)
+model Room {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Room metadata
+  name        String
+  description String?
+  
+  // LiveKit room ID (matches LiveKit server)
+  livekitRoomId String  @unique
+  
+  // Room settings
+  maxParticipants Int     @default(10)
+  isActive        Boolean @default(true)
+  isPublic        Boolean @default(false) // For guest links
+  
+  // Guest access
+  guestToken String? @unique // Token for guest link access
+  
+  // Timing
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+
+  // Creator
+  createdById String
+  createdBy   User   @relation("RoomCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  // Relations
+  participants RoomParticipant[]
+  calls        Call[]
+
+  @@index([livekitRoomId])
+  @@index([guestToken])
+  @@index([isActive])
+  @@index([createdById])
+  @@map("rooms")
+}
+
+// RoomParticipant model - Tracks who joined which room
+model RoomParticipant {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Participant
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Guest participant (no user account)
+  guestName String?
+  isGuest   Boolean @default(false)
+
+  // Room
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  // Participation metadata
+  joinedAt DateTime  @default(now())
+  leftAt   DateTime?
+  duration Int?      @default(0) // Duration in seconds
+
+  @@index([roomId])
+  @@index([userId])
+  @@map("room_participants")
+}
+
+// Chat model - Chat metadata (messages stored in Dexie.js on client)
+// Only stores metadata for chat list: last message preview, unread counts
+model Chat {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Participants (always 2 for 1-on-1 chat)
+  userId1 String
+  userId2 String
+
+  // Last message metadata (for preview in chat list)
+  lastMessage   String?   // Preview text of last message
+  lastMessageAt DateTime? // Timestamp of last message
+  lastMessageBy String?   // userId who sent last message
+
+  // Unread counts (per user)
+  unreadCountUser1 Int @default(0) // Unread count for user1
+  unreadCountUser2 Int @default(0) // Unread count for user2
+
+  // Relations
+  user1 User @relation("ChatUser1", fields: [userId1], references: [id], onDelete: Cascade)
+  user2 User @relation("ChatUser2", fields: [userId2], references: [id], onDelete: Cascade)
+
+  @@unique([userId1, userId2])
+  @@index([userId1])
+  @@index([userId2])
+  @@index([lastMessageAt])
+  @@map("chats")
+}
+
