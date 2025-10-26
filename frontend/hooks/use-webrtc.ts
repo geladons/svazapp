@@ -85,39 +85,39 @@ const DEFAULT_CONSTRAINTS: MediaConstraints = {
 };
 
 /**
- * Get ICE servers configuration from environment
+ * Fetch ICE servers configuration from API
+ *
+ * Retrieves STUN/TURN server configuration with temporary credentials
+ * from the backend API. Falls back to public STUN servers on error.
+ *
+ * @returns Promise resolving to array of ICE servers
  */
-function getIceServers(): RTCIceServer[] {
-  const stunUrl = process.env.NEXT_PUBLIC_STUN_URL;
-  const turnUrl = process.env.NEXT_PUBLIC_TURN_URL;
-
-  const iceServers: RTCIceServer[] = [];
-
-  // Add STUN server
-  if (stunUrl) {
-    iceServers.push({ urls: stunUrl });
-  }
-
-  // Add TURN server
-  if (turnUrl) {
-    // In production, TURN credentials should be fetched from API
-    // For now, we use environment variables
-    iceServers.push({
-      urls: turnUrl,
-      username: 'svazuser', // This should come from API in production
-      credential: 'change_this_secure_coturn_password', // This should come from API in production
+async function fetchIceServers(): Promise<RTCIceServer[]> {
+  try {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
+    const response = await fetch(`${apiUrl}/ice-servers`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
     });
-  }
 
-  // Fallback to public STUN servers if no custom servers configured
-  if (iceServers.length === 0) {
-    iceServers.push(
+    if (!response.ok) {
+      throw new Error(`Failed to fetch ICE servers: ${response.statusText}`);
+    }
+
+    const data = (await response.json()) as { iceServers: RTCIceServer[] };
+    return data.iceServers;
+  } catch (error) {
+    console.error('Error fetching ICE servers, using fallback:', error);
+
+    // Fallback to public STUN servers
+    return [
       { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' }
-    );
+      { urls: 'stun:stun1.l.google.com:19302' },
+    ];
   }
-
-  return iceServers;
 }
 
 /**
@@ -175,8 +175,9 @@ export function useWebRTC(): UseWebRTCReturn {
   /**
    * Create RTCPeerConnection
    */
-  const createPeerConnection = useCallback(() => {
-    const iceServers = getIceServers();
+  const createPeerConnection = useCallback(async () => {
+    // Fetch ICE servers with temporary TURN credentials from API
+    const iceServers = await fetchIceServers();
 
     const pc = new RTCPeerConnection({
       iceServers,
@@ -269,7 +270,7 @@ export function useWebRTC(): UseWebRTCReturn {
         const stream = await getUserMedia(constraints);
 
         // Create peer connection
-        const pc = createPeerConnection();
+        const pc = await createPeerConnection();
         peerConnectionRef.current = pc;
 
         // Add local tracks to peer connection
@@ -318,7 +319,7 @@ export function useWebRTC(): UseWebRTCReturn {
         const stream = await getUserMedia(constraints);
 
         // Create peer connection
-        const pc = createPeerConnection();
+        const pc = await createPeerConnection();
         peerConnectionRef.current = pc;
 
         // Add local tracks to peer connection

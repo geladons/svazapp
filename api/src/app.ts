@@ -14,6 +14,7 @@ import livekitRoutes from './routes/livekit.routes.js';
 import contactRoutes from './routes/contact.routes.js';
 import messageRoutes from './routes/message.routes.js';
 import callRoutes from './routes/call.routes.js';
+import turnRoutes from './routes/turn.routes.js';
 
 /**
  * Build and configure the Fastify application
@@ -78,6 +79,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(contactRoutes, { prefix: '/api/contacts' });
   await app.register(messageRoutes, { prefix: '/api/chats' });
   await app.register(callRoutes, { prefix: '/api/calls' });
+  await app.register(turnRoutes, { prefix: '/api' });
 
   return app;
 }

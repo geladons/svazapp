@@ -129,7 +129,12 @@ services:
     image: coturn/coturn:latest
     container_name: svazapp-coturn
     restart: unless-stopped
-    network_mode: host
+    ports:
+      - '${COTURN_LISTENING_PORT}:${COTURN_LISTENING_PORT}/tcp'
+      - '${COTURN_LISTENING_PORT}:${COTURN_LISTENING_PORT}/udp'
+      - '${COTURN_TLS_LISTENING_PORT}:${COTURN_TLS_LISTENING_PORT}/tcp'
+      - '${COTURN_TLS_LISTENING_PORT}:${COTURN_TLS_LISTENING_PORT}/udp'
+      - '${COTURN_MIN_PORT}-${COTURN_MAX_PORT}:${COTURN_MIN_PORT}-${COTURN_MAX_PORT}/udp'
     environment:
       DETECT_EXTERNAL_IP: 'yes'
       DETECT_RELAY_IP: 'yes'
@@ -140,6 +145,8 @@ services:
       MAX_PORT: ${COTURN_MAX_PORT}
     volumes:
       - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf
+    networks:
+      - svazapp-network
 
 # =============================================================================
 # NETWORKS

@@ -291,7 +291,7 @@ LIVEKIT_API_SECRET=9mK2pL5vN8qR1wT4yU7iO0aS3dF6gH9jK2lM5nB8vC1xZ
 - **Required**: ✅ Yes
 - **Default**: `change_this_secure_coturn_password`
 - **Must Change**: ✅ **YES - CRITICAL**
-- **Description**: TURN server password
+- **Description**: TURN server password (shared secret for generating temporary credentials)
 - **Security**: Strong, random password
 - **Generate**: `openssl rand -base64 32`
 
@@ -299,6 +299,11 @@ LIVEKIT_API_SECRET=9mK2pL5vN8qR1wT4yU7iO0aS3dF6gH9jK2lM5nB8vC1xZ
 ```bash
 COTURN_PASSWORD=5mK8pL1vN4qR7wT0yU3iO6aS9dF2gH5jK8lM1nB4vC7xZ
 ```
+
+**Important Notes**:
+- This password is used by the API to generate temporary TURN credentials
+- Clients never see this password - they receive time-limited credentials from `/api/turn-credentials` endpoint
+- Credentials are valid for 1 hour by default
 
 ### `COTURN_LISTENING_PORT`
 
