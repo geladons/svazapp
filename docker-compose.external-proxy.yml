@@ -1,0 +1,152 @@
+# =============================================================================
+# SVAZ.APP - DOCKER COMPOSE (EXTERNAL REVERSE PROXY MODE)
+# =============================================================================
+# Use this file when deploying behind an external reverse proxy
+# (Nginx Proxy Manager, Traefik, Nginx, Apache, etc.)
+#
+# This configuration:
+# - Does NOT include Caddy (your external proxy handles SSL)
+# - Exposes frontend and API ports directly
+# - Suitable for VPS behind NPM or other reverse proxy
+#
+# Usage:
+#   docker compose -f docker-compose.external-proxy.yml up -d
+# =============================================================================
+
+services:
+  # =============================================================================
+  # DATABASE SERVICE (PostgreSQL 16)
+  # =============================================================================
+  db:
+    image: postgres:16-alpine
+    container_name: svazapp-db
+    restart: unless-stopped
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - svazapp-network
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # API SERVICE (Fastify Backend)
+  # =============================================================================
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: svazapp-api
+    restart: unless-stopped
+    ports:
+      - '${API_PORT}:${API_PORT}'  # Exposed for external proxy
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      PORT: ${API_PORT}
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+      LIVEKIT_URL: ${LIVEKIT_URL}
+      LIVEKIT_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL}
+      DOMAIN: ${DOMAIN}
+    networks:
+      - svazapp-network
+
+  # =============================================================================
+  # FRONTEND SERVICE (Next.js PWA)
+  # =============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL}
+        NEXT_PUBLIC_LIVEKIT_URL: ${NEXT_PUBLIC_LIVEKIT_URL}
+        NEXT_PUBLIC_STUN_URL: ${NEXT_PUBLIC_STUN_URL}
+        NEXT_PUBLIC_TURN_URL: ${NEXT_PUBLIC_TURN_URL}
+        NEXT_PUBLIC_WEBTORRENT_TRACKERS: ${NEXT_PUBLIC_WEBTORRENT_TRACKERS}
+    container_name: svazapp-frontend
+    restart: unless-stopped
+    ports:
+      - '${FRONTEND_PORT}:${FRONTEND_PORT}'  # Exposed for external proxy
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      PORT: ${FRONTEND_PORT}
+    networks:
+      - svazapp-network
+
+  # =============================================================================
+  # LIVEKIT SERVICE (SFU Server)
+  # =============================================================================
+  livekit:
+    image: livekit/livekit-server:v1.5
+    container_name: svazapp-livekit
+    restart: unless-stopped
+    command: --config /etc/livekit.yaml
+    ports:
+      - '7880:7880'  # Exposed for external proxy (WebSocket)
+    environment:
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+    volumes:
+      - ./livekit/livekit.yaml:/etc/livekit.yaml
+    networks:
+      - svazapp-network
+
+  # =============================================================================
+  # COTURN SERVICE (STUN/TURN Server)
+  # =============================================================================
+  coturn:
+    image: coturn/coturn:latest
+    container_name: svazapp-coturn
+    restart: unless-stopped
+    ports:
+      - '${COTURN_LISTENING_PORT}:${COTURN_LISTENING_PORT}/tcp'
+      - '${COTURN_LISTENING_PORT}:${COTURN_LISTENING_PORT}/udp'
+      - '${COTURN_TLS_LISTENING_PORT}:${COTURN_TLS_LISTENING_PORT}/tcp'
+      - '${COTURN_TLS_LISTENING_PORT}:${COTURN_TLS_LISTENING_PORT}/udp'
+      - '${COTURN_MIN_PORT}-${COTURN_MAX_PORT}:${COTURN_MIN_PORT}-${COTURN_MAX_PORT}/udp'
+    environment:
+      DETECT_EXTERNAL_IP: 'yes'
+      DETECT_RELAY_IP: 'yes'
+      REALM: ${COTURN_REALM}
+      USERNAME: ${COTURN_USER}
+      PASSWORD: ${COTURN_PASSWORD}
+      MIN_PORT: ${COTURN_MIN_PORT}
+      MAX_PORT: ${COTURN_MAX_PORT}
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf
+    networks:
+      - svazapp-network
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+networks:
+  svazapp-network:
+    driver: bridge
+
+# =============================================================================
+# VOLUMES
+# =============================================================================
+volumes:
+  postgres-data:
+    driver: local
+

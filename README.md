@@ -24,9 +24,9 @@ The system consists of 6 services orchestrated by docker-compose:
 
 ## 🚀 Quick Start
 
-### One-Command Installation (Recommended)
+### One-Command Interactive Installation
 
-Install svaz.app on any Linux server or macOS with a single command:
+Install svaz.app with a single command:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/geladons/svazapp/main/install.sh | bash
@@ -38,40 +38,77 @@ Or with wget:
 wget -qO- https://raw.githubusercontent.com/geladons/svazapp/main/install.sh | bash
 ```
 
-The installation script will:
-- ✅ Check system requirements (RAM, disk space, CPU)
-- ✅ Install dependencies (Docker, Docker Compose, Git)
-- ✅ Configure firewall and ports
-- ✅ Clone the repository
-- ✅ Auto-generate all secrets and keys
-- ✅ Deploy all services with docker-compose
-- ✅ Run health checks
-- ✅ Provide access credentials
+**The installer will guide you through:**
 
-**Supported Platforms**:
+1. **Choose Deployment Scenario:**
+   - 🟢 **Standalone VPS** - All-in-one with automatic SSL (Caddy)
+   - 🔵 **External Reverse Proxy** - Use existing NPM/Traefik
+
+2. **Choose Installation Mode:**
+   - 🚀 **Quick Install** - Minimal prompts, auto-generate secrets
+   - ⚙️ **Advanced Install** - Full control over configuration
+
+3. **Automatic Setup:**
+   - ✅ Check system requirements (RAM, disk space, CPU)
+   - ✅ Install dependencies (Docker, Docker Compose, Git)
+   - ✅ Configure firewall and ports
+   - ✅ Clone the repository
+   - ✅ Auto-generate all secrets and keys
+   - ✅ Deploy all services
+   - ✅ Verify installation
+
+**Supported Platforms:**
 - Ubuntu 20.04+
 - Debian 11+
 - CentOS 8+
 - Fedora 35+
-- macOS 12+ (with Docker Desktop)
 
-**Installation Options**:
+---
+
+### Manual Installation
+
+If you prefer manual installation or need more control:
+
+#### Scenario A: Standalone VPS (with Caddy)
 
 ```bash
-# Advanced installation (interactive configuration)
-curl -fsSL https://raw.githubusercontent.com/geladons/svazapp/main/install.sh | bash -s -- --advanced
+# Clone repository
+git clone https://github.com/geladons/svazapp.git
+cd svazapp
 
-# Custom installation directory
-curl -fsSL https://raw.githubusercontent.com/geladons/svazapp/main/install.sh | bash -s -- --dir /custom/path
+# Configure environment
+cp .env.example .env
+nano .env  # Edit with your values
 
-# Unattended installation (skip confirmations)
-curl -fsSL https://raw.githubusercontent.com/geladons/svazapp/main/install.sh | bash -s -- --yes
-
-# Specify domain and email
-curl -fsSL https://raw.githubusercontent.com/geladons/svazapp/main/install.sh | bash -s -- --domain svaz.app --email admin@svaz.app
+# Start services
+docker compose up -d
 ```
 
-For detailed installation instructions and manual setup, see [DEPLOYMENT.md](./DEPLOYMENT.md).
+#### Scenario B: External Reverse Proxy (NPM/Traefik)
+
+```bash
+# Clone repository
+git clone https://github.com/geladons/svazapp.git
+cd svazapp
+
+# Configure environment
+cp .env.external-proxy.example .env
+nano .env  # Edit with your values
+
+# Start services (without Caddy)
+docker compose -f docker-compose.external-proxy.yml up -d
+```
+
+Then configure your reverse proxy (NPM/Traefik) to proxy:
+- `/` → `your-vps-ip:3000` (Frontend)
+- `/api` → `your-vps-ip:8080` (API)
+- `/livekit` → `your-vps-ip:7880` (LiveKit)
+
+**Important:** CoTURN ports (3478, 5349, 49152-65535) must be forwarded directly from router to VPS.
+
+---
+
+**📖 Detailed Instructions:** See [DEPLOYMENT.md](./DEPLOYMENT.md) for step-by-step guides for both scenarios.
 
 ---
 

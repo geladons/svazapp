@@ -1,20 +1,13 @@
 #!/usr/bin/env bash
 
 # =============================================================================
-# SVAZ.APP AUTOMATED INSTALLATION SCRIPT
+# SVAZ.APP INTERACTIVE INSTALLATION SCRIPT
 # =============================================================================
 # One-command installation for svaz.app - Self-hosted video calling platform
 # 
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/geladons/svazapp/main/install.sh | bash
 #   wget -qO- https://raw.githubusercontent.com/geladons/svazapp/main/install.sh | bash
-#
-# Options:
-#   --advanced          Interactive mode with all configuration options
-#   --dir PATH          Custom installation directory (default: /opt/svazapp)
-#   --yes               Skip all confirmations (unattended mode)
-#   --domain DOMAIN     Set domain name
-#   --email EMAIL       Set admin email for SSL certificates
 #
 # =============================================================================
 
@@ -26,33 +19,27 @@ set -o pipefail  # Exit on pipe failure
 # CONFIGURATION
 # =============================================================================
 
-# Script version
-VERSION="1.0.0"
-
-# Default values
+VERSION="2.0.0"
 DEFAULT_INSTALL_DIR="/opt/svazapp"
-DEFAULT_DOMAIN="svaz.app"
-DEFAULT_EMAIL="admin@svaz.app"
-
-# Installation directory
 INSTALL_DIR="${DEFAULT_INSTALL_DIR}"
+LOG_FILE="install.log"
 
-# Mode flags
-ADVANCED_MODE=false
-UNATTENDED_MODE=false
+# User selections
+DEPLOYMENT_SCENARIO=""  # "standalone" or "external-proxy"
+INSTALLATION_MODE=""    # "quick" or "advanced"
 
 # User-provided values
 USER_DOMAIN=""
 USER_EMAIL=""
-
-# Log file
-LOG_FILE="install.log"
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+BOLD='\033[1m'
 NC='\033[0m' # No Color
 
 # =============================================================================
@@ -61,36 +48,53 @@ NC='\033[0m' # No Color
 
 # Print colored output
 print_info() {
-    echo -e "${BLUE}[INFO]${NC} $1" | tee -a "${LOG_FILE}"
+    echo -e "${BLUE}ℹ${NC} $1" | tee -a "${LOG_FILE}"
 }
 
 print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1" | tee -a "${LOG_FILE}"
+    echo -e "${GREEN}✓${NC} $1" | tee -a "${LOG_FILE}"
 }
 
 print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1" | tee -a "${LOG_FILE}"
+    echo -e "${YELLOW}⚠${NC} $1" | tee -a "${LOG_FILE}"
 }
 
 print_error() {
-    echo -e "${RED}[ERROR]${NC} $1" | tee -a "${LOG_FILE}"
+    echo -e "${RED}✗${NC} $1" | tee -a "${LOG_FILE}"
+}
+
+print_step() {
+    echo -e "${CYAN}▶${NC} ${BOLD}$1${NC}" | tee -a "${LOG_FILE}"
 }
 
 # Print section header
 print_header() {
     echo "" | tee -a "${LOG_FILE}"
-    echo "=============================================================================" | tee -a "${LOG_FILE}"
-    echo "$1" | tee -a "${LOG_FILE}"
-    echo "=============================================================================" | tee -a "${LOG_FILE}"
+    echo -e "${BOLD}═══════════════════════════════════════════════════════════════════════${NC}" | tee -a "${LOG_FILE}"
+    echo -e "${BOLD}  $1${NC}" | tee -a "${LOG_FILE}"
+    echo -e "${BOLD}═══════════════════════════════════════════════════════════════════════${NC}" | tee -a "${LOG_FILE}"
     echo "" | tee -a "${LOG_FILE}"
 }
 
-# Ask for confirmation
-confirm() {
-    if [ "${UNATTENDED_MODE}" = true ]; then
-        return 0
-    fi
-    
+# Print welcome banner
+print_banner() {
+    clear
+    echo -e "${CYAN}"
+    cat << "EOF"
+    ███████╗██╗   ██╗ █████╗ ███████╗     █████╗ ██████╗ ██████╗ 
+    ██╔════╝██║   ██║██╔══██╗╚══███╔╝    ██╔══██╗██╔══██╗██╔══██╗
+    ███████╗██║   ██║███████║  ███╔╝     ███████║██████╔╝██████╔╝
+    ╚════██║╚██╗ ██╔╝██╔══██║ ███╔╝      ██╔══██║██╔═══╝ ██╔═══╝ 
+    ███████║ ╚████╔╝ ██║  ██║███████╗    ██║  ██║██║     ██║     
+    ╚══════╝  ╚═══╝  ╚═╝  ╚═╝╚══════╝    ╚═╝  ╚═╝╚═╝     ╚═╝     
+EOF
+    echo -e "${NC}"
+    echo -e "${BOLD}    Autonomous Video Communication Platform - Installer v${VERSION}${NC}"
+    echo ""
+}
+
+# Ask yes/no question
+ask_yes_no() {
     local prompt="$1"
     local default="${2:-n}"
     
@@ -100,702 +104,631 @@ confirm() {
         prompt="${prompt} [y/N]: "
     fi
     
-    read -p "${prompt}" -r response
-    response=${response:-${default}}
+    while true; do
+        read -p "$(echo -e ${CYAN}${prompt}${NC})" yn
+        yn=${yn:-$default}
+        case $yn in
+            [Yy]* ) return 0;;
+            [Nn]* ) return 1;;
+            * ) echo "Please answer yes or no.";;
+        esac
+    done
+}
+
+# Read user input with default value
+read_input() {
+    local prompt="$1"
+    local default="$2"
+    local var_name="$3"
     
-    if [[ "${response}" =~ ^[Yy]$ ]]; then
-        return 0
+    if [ -n "$default" ]; then
+        read -p "$(echo -e ${CYAN}${prompt} [${default}]: ${NC})" value
+        value=${value:-$default}
     else
+        read -p "$(echo -e ${CYAN}${prompt}: ${NC})" value
+    fi
+    
+    eval $var_name="'$value'"
+}
+
+# Validate domain name
+validate_domain() {
+    local domain="$1"
+    if [[ ! "$domain" =~ ^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]?\.[a-zA-Z]{2,}$ ]]; then
         return 1
     fi
+    return 0
 }
 
-# Generate random string
-generate_random_string() {
-    local length="${1:-64}"
-    openssl rand -base64 "$((length * 3 / 4))" | tr -d '\n' | head -c "${length}"
+# Validate email
+validate_email() {
+    local email="$1"
+    if [[ ! "$email" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+        return 1
+    fi
+    return 0
 }
 
-# Check if command exists
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
+# Generate random secret
+generate_secret() {
+    local length="${1:-32}"
+    openssl rand -base64 "$length" | tr -d "=+/" | cut -c1-"$length"
 }
 
 # Detect OS
 detect_os() {
     if [ -f /etc/os-release ]; then
         . /etc/os-release
-        OS="${ID}"
-        OS_VERSION="${VERSION_ID}"
+        OS=$ID
+        OS_VERSION=$VERSION_ID
     elif [ -f /etc/redhat-release ]; then
         OS="rhel"
     elif [ "$(uname)" = "Darwin" ]; then
         OS="macos"
-        OS_VERSION="$(sw_vers -productVersion)"
     else
         OS="unknown"
     fi
     
-    print_info "Detected OS: ${OS} ${OS_VERSION}"
+    print_info "Detected OS: $OS $OS_VERSION"
 }
 
 # Check system requirements
-check_system_requirements() {
-    print_header "CHECKING SYSTEM REQUIREMENTS"
+check_requirements() {
+    print_step "Checking system requirements..."
     
     # Check RAM
-    local total_ram
-    if [ "${OS}" = "macos" ]; then
-        total_ram=$(($(sysctl -n hw.memsize) / 1024 / 1024))
-    else
-        total_ram=$(free -m | awk '/^Mem:/{print $2}')
-    fi
-    
-    print_info "Total RAM: ${total_ram} MB"
-    
-    if [ "${total_ram}" -lt 2048 ]; then
-        print_warning "Minimum 2GB RAM recommended. You have ${total_ram} MB."
-        if ! confirm "Continue anyway?"; then
+    local total_ram=$(free -m | awk '/^Mem:/{print $2}')
+    if [ "$total_ram" -lt 2000 ]; then
+        print_warning "Low RAM detected: ${total_ram}MB (minimum 2GB recommended)"
+        if ! ask_yes_no "Continue anyway?"; then
             exit 1
         fi
     else
-        print_success "RAM check passed"
+        print_success "RAM: ${total_ram}MB"
     fi
     
     # Check disk space
-    local available_space
-    available_space=$(df -BG "$(dirname "${INSTALL_DIR}")" | awk 'NR==2 {print $4}' | sed 's/G//')
-    
-    print_info "Available disk space: ${available_space} GB"
-    
-    if [ "${available_space}" -lt 10 ]; then
-        print_warning "Minimum 10GB disk space recommended. You have ${available_space} GB."
-        if ! confirm "Continue anyway?"; then
+    local free_space=$(df -BG . | awk 'NR==2 {print $4}' | sed 's/G//')
+    if [ "$free_space" -lt 20 ]; then
+        print_warning "Low disk space: ${free_space}GB (minimum 20GB recommended)"
+        if ! ask_yes_no "Continue anyway?"; then
             exit 1
         fi
     else
-        print_success "Disk space check passed"
+        print_success "Disk space: ${free_space}GB available"
     fi
     
-    # Check if running as root or with sudo
-    if [ "${EUID}" -ne 0 ]; then
-        print_error "This script must be run as root or with sudo"
-        exit 1
-    fi
-    
-    print_success "System requirements check completed"
+    # Check CPU cores
+    local cpu_cores=$(nproc)
+    print_success "CPU cores: $cpu_cores"
 }
 
-# Install dependencies
-install_dependencies() {
-    print_header "INSTALLING DEPENDENCIES"
+# =============================================================================
+# INTERACTIVE MENUS
+# =============================================================================
+
+# Menu: Select deployment scenario
+select_deployment_scenario() {
+    print_header "STEP 1: Choose Deployment Scenario"
     
-    # Check for Docker
-    if command_exists docker; then
-        print_success "Docker is already installed"
-        docker --version | tee -a "${LOG_FILE}"
-    else
-        print_info "Installing Docker..."
-        
-        case "${OS}" in
-            ubuntu|debian)
-                apt-get update
-                apt-get install -y ca-certificates curl gnupg
-                install -m 0755 -d /etc/apt/keyrings
-                curl -fsSL https://download.docker.com/linux/${OS}/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-                chmod a+r /etc/apt/keyrings/docker.gpg
-                echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${OS} $(. /etc/os-release && echo "${VERSION_CODENAME}") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-                apt-get update
-                apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    echo -e "${BOLD}Choose your deployment scenario:${NC}"
+    echo ""
+    echo -e "${GREEN}1)${NC} 🟢 ${BOLD}Standalone VPS${NC} (All-in-One with Caddy)"
+    echo "   ${CYAN}├─${NC} Automatic SSL certificates (Let's Encrypt)"
+    echo "   ${CYAN}├─${NC} Easiest setup for beginners"
+    echo "   ${CYAN}└─${NC} Recommended for first-time deployment"
+    echo ""
+    echo -e "${BLUE}2)${NC} 🔵 ${BOLD}VPS Behind External Reverse Proxy${NC}"
+    echo "   ${CYAN}├─${NC} Use existing Nginx Proxy Manager, Traefik, etc."
+    echo "   ${CYAN}├─${NC} No Caddy, no automatic SSL"
+    echo "   ${CYAN}└─${NC} For advanced users with existing infrastructure"
+    echo ""
+    
+    while true; do
+        read -p "$(echo -e ${CYAN}Enter your choice [1-2]: ${NC})" choice
+        case $choice in
+            1)
+                DEPLOYMENT_SCENARIO="standalone"
+                print_success "Selected: Standalone VPS (with Caddy)"
+                break
                 ;;
-            centos|rhel|fedora)
-                yum install -y yum-utils
-                yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-                yum install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-                systemctl start docker
-                systemctl enable docker
-                ;;
-            macos)
-                print_error "Please install Docker Desktop for Mac from https://www.docker.com/products/docker-desktop"
-                exit 1
+            2)
+                DEPLOYMENT_SCENARIO="external-proxy"
+                print_success "Selected: VPS Behind External Reverse Proxy"
+                break
                 ;;
             *)
-                print_error "Unsupported OS: ${OS}"
-                exit 1
-                ;;
-        esac
-        
-        print_success "Docker installed successfully"
-    fi
-    
-    # Check for Docker Compose
-    if docker compose version >/dev/null 2>&1; then
-        print_success "Docker Compose is already installed"
-        docker compose version | tee -a "${LOG_FILE}"
-    else
-        print_error "Docker Compose plugin not found. Please install Docker Compose."
-        exit 1
-    fi
-    
-    # Check for Git
-    if command_exists git; then
-        print_success "Git is already installed"
-    else
-        print_info "Installing Git..."
-        
-        case "${OS}" in
-            ubuntu|debian)
-                apt-get install -y git
-                ;;
-            centos|rhel|fedora)
-                yum install -y git
-                ;;
-            macos)
-                print_error "Please install Git from https://git-scm.com/download/mac"
-                exit 1
-                ;;
-        esac
-        
-        print_success "Git installed successfully"
-    fi
-    
-    # Check for curl
-    if ! command_exists curl; then
-        print_info "Installing curl..."
-        
-        case "${OS}" in
-            ubuntu|debian)
-                apt-get install -y curl
-                ;;
-            centos|rhel|fedora)
-                yum install -y curl
-                ;;
-        esac
-    fi
-    
-    print_success "All dependencies installed"
-}
-
-# Check and configure firewall
-configure_firewall() {
-    print_header "CONFIGURING FIREWALL"
-    
-    local ports=("80" "443" "3478" "7880" "7881")
-    local port_ranges=("50000:60000")
-    
-    if command_exists ufw; then
-        print_info "Detected UFW firewall"
-        
-        if confirm "Configure UFW firewall rules?" "y"; then
-            for port in "${ports[@]}"; do
-                ufw allow "${port}" >/dev/null 2>&1 || true
-                print_info "Allowed port ${port}"
-            done
-            
-            for range in "${port_ranges[@]}"; do
-                ufw allow "${range}/udp" >/dev/null 2>&1 || true
-                print_info "Allowed UDP port range ${range}"
-            done
-            
-            print_success "UFW firewall configured"
-        fi
-    elif command_exists firewall-cmd; then
-        print_info "Detected firewalld"
-        
-        if confirm "Configure firewalld rules?" "y"; then
-            for port in "${ports[@]}"; do
-                firewall-cmd --permanent --add-port="${port}/tcp" >/dev/null 2>&1 || true
-                print_info "Allowed port ${port}/tcp"
-            done
-            
-            firewall-cmd --permanent --add-port=3478/udp >/dev/null 2>&1 || true
-            firewall-cmd --permanent --add-port=50000-60000/udp >/dev/null 2>&1 || true
-            firewall-cmd --reload >/dev/null 2>&1 || true
-            
-            print_success "firewalld configured"
-        fi
-    else
-        print_warning "No supported firewall detected. Please configure firewall manually."
-        print_info "Required ports: 80, 443, 3478, 7880-7881, 50000-60000/udp"
-    fi
-}
-
-# Parse command line arguments
-parse_arguments() {
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --advanced)
-                ADVANCED_MODE=true
-                shift
-                ;;
-            --dir)
-                INSTALL_DIR="$2"
-                shift 2
-                ;;
-            --yes)
-                UNATTENDED_MODE=true
-                shift
-                ;;
-            --domain)
-                USER_DOMAIN="$2"
-                shift 2
-                ;;
-            --email)
-                USER_EMAIL="$2"
-                shift 2
-                ;;
-            --help)
-                echo "Usage: $0 [OPTIONS]"
-                echo ""
-                echo "Options:"
-                echo "  --advanced          Interactive mode with all configuration options"
-                echo "  --dir PATH          Custom installation directory (default: /opt/svazapp)"
-                echo "  --yes               Skip all confirmations (unattended mode)"
-                echo "  --domain DOMAIN     Set domain name"
-                echo "  --email EMAIL       Set admin email for SSL certificates"
-                echo "  --help              Show this help message"
-                exit 0
-                ;;
-            *)
-                print_error "Unknown option: $1"
-                exit 1
+                print_error "Invalid choice. Please enter 1 or 2."
                 ;;
         esac
     done
+    
+    echo ""
 }
+
+# Menu: Select installation mode
+select_installation_mode() {
+    print_header "STEP 2: Choose Installation Mode"
+    
+    echo -e "${BOLD}Choose installation mode:${NC}"
+    echo ""
+    echo -e "${GREEN}1)${NC} 🚀 ${BOLD}Quick Install${NC} (Recommended)"
+    echo "   ${CYAN}├─${NC} Minimal interactive prompts"
+    echo "   ${CYAN}├─${NC} Auto-generate all secrets and keys"
+    echo "   ${CYAN}├─${NC} Auto-detect system settings"
+    echo "   ${CYAN}└─${NC} Best for most users"
+    echo ""
+    echo -e "${YELLOW}2)${NC} ⚙️  ${BOLD}Advanced Install${NC}"
+    echo "   ${CYAN}├─${NC} Configure every setting manually"
+    echo "   ${CYAN}├─${NC} Option to skip/auto-fill each step"
+    echo "   ${CYAN}├─${NC} Full control over configuration"
+    echo "   ${CYAN}└─${NC} For experienced users"
+    echo ""
+    
+    while true; do
+        read -p "$(echo -e ${CYAN}Enter your choice [1-2]: ${NC})" choice
+        case $choice in
+            1)
+                INSTALLATION_MODE="quick"
+                print_success "Selected: Quick Install"
+                break
+                ;;
+            2)
+                INSTALLATION_MODE="advanced"
+                print_success "Selected: Advanced Install"
+                break
+                ;;
+            *)
+                print_error "Invalid choice. Please enter 1 or 2."
+                ;;
+        esac
+    done
+    
+    echo ""
+}
+
+# =============================================================================
+# DEPENDENCY INSTALLATION
+# =============================================================================
+
+# Install Docker
+install_docker() {
+    print_step "Installing Docker..."
+
+    if command -v docker &> /dev/null; then
+        local docker_version=$(docker --version | awk '{print $3}' | sed 's/,//')
+        print_success "Docker already installed: $docker_version"
+        return 0
+    fi
+
+    case "$OS" in
+        ubuntu|debian)
+            sudo apt-get update
+            sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
+            curl -fsSL https://download.docker.com/linux/$OS/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/$OS $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+            sudo apt-get update
+            sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+            ;;
+        centos|rhel|fedora)
+            sudo yum install -y yum-utils
+            sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+            sudo yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+            sudo systemctl start docker
+            sudo systemctl enable docker
+            ;;
+        *)
+            print_error "Unsupported OS: $OS"
+            exit 1
+            ;;
+    esac
+
+    # Add current user to docker group
+    sudo usermod -aG docker $USER
+
+    print_success "Docker installed successfully"
+}
+
+# Install Git
+install_git() {
+    print_step "Installing Git..."
+
+    if command -v git &> /dev/null; then
+        print_success "Git already installed"
+        return 0
+    fi
+
+    case "$OS" in
+        ubuntu|debian)
+            sudo apt-get install -y git
+            ;;
+        centos|rhel|fedora)
+            sudo yum install -y git
+            ;;
+        *)
+            print_error "Unsupported OS: $OS"
+            exit 1
+            ;;
+    esac
+
+    print_success "Git installed successfully"
+}
+
+# Configure firewall
+configure_firewall() {
+    print_step "Configuring firewall..."
+
+    if ! command -v ufw &> /dev/null; then
+        print_warning "UFW not installed, skipping firewall configuration"
+        return 0
+    fi
+
+    if ! ask_yes_no "Configure firewall (UFW) automatically?" "y"; then
+        print_info "Skipping firewall configuration"
+        return 0
+    fi
+
+    # Allow SSH first (important!)
+    sudo ufw allow 22/tcp
+
+    if [ "$DEPLOYMENT_SCENARIO" = "standalone" ]; then
+        # Standalone mode: Caddy handles HTTP/HTTPS
+        sudo ufw allow 80/tcp
+        sudo ufw allow 443/tcp
+        sudo ufw allow 443/udp
+    else
+        # External proxy mode: Expose frontend, API, LiveKit
+        sudo ufw allow 3000/tcp
+        sudo ufw allow 8080/tcp
+        sudo ufw allow 7880/tcp
+    fi
+
+    # CoTURN ports (both scenarios)
+    sudo ufw allow 3478/tcp
+    sudo ufw allow 3478/udp
+    sudo ufw allow 5349/tcp
+    sudo ufw allow 5349/udp
+    sudo ufw allow 49152:65535/udp
+
+    # Enable firewall
+    sudo ufw --force enable
+
+    print_success "Firewall configured"
+}
+
+# =============================================================================
+# CONFIGURATION GENERATION
+# =============================================================================
+
+# Collect user configuration (Quick mode)
+collect_config_quick() {
+    print_header "STEP 3: Configuration"
+
+    # Domain
+    while true; do
+        read_input "Enter your domain name (e.g., svaz.app)" "" USER_DOMAIN
+        if validate_domain "$USER_DOMAIN"; then
+            break
+        else
+            print_error "Invalid domain format. Please try again."
+        fi
+    done
+
+    # Email
+    while true; do
+        read_input "Enter your email for SSL certificates" "" USER_EMAIL
+        if validate_email "$USER_EMAIL"; then
+            break
+        else
+            print_error "Invalid email format. Please try again."
+        fi
+    done
+
+    print_success "Configuration collected"
+    echo ""
+}
+
+# Collect user configuration (Advanced mode)
+collect_config_advanced() {
+    print_header "STEP 3: Advanced Configuration"
+
+    # Domain
+    while true; do
+        read_input "Enter your domain name" "svaz.app" USER_DOMAIN
+        if validate_domain "$USER_DOMAIN"; then
+            break
+        else
+            print_error "Invalid domain format. Please try again."
+        fi
+    done
+
+    # Email
+    while true; do
+        read_input "Enter your email for SSL certificates" "admin@${USER_DOMAIN}" USER_EMAIL
+        if validate_email "$USER_EMAIL"; then
+            break
+        else
+            print_error "Invalid email format. Please try again."
+        fi
+    done
+
+    # Installation directory
+    read_input "Installation directory" "$DEFAULT_INSTALL_DIR" INSTALL_DIR
+
+    print_success "Configuration collected"
+    echo ""
+}
+
+# Generate .env file
+generate_env_file() {
+    print_step "Generating environment configuration..."
+
+    local env_template
+    if [ "$DEPLOYMENT_SCENARIO" = "standalone" ]; then
+        env_template=".env.example"
+    else
+        env_template=".env.external-proxy.example"
+    fi
+
+    if [ ! -f "$env_template" ]; then
+        print_error "Template file $env_template not found"
+        exit 1
+    fi
+
+    # Copy template
+    cp "$env_template" .env
+
+    # Generate secrets
+    local jwt_secret=$(generate_secret 48)
+    local coturn_password=$(generate_secret 32)
+    local session_secret=$(generate_secret 32)
+    local livekit_api_key=$(openssl rand -hex 16)
+    local livekit_api_secret=$(generate_secret 32)
+    local postgres_password=$(generate_secret 32)
+
+    # Replace values in .env
+    sed -i "s|DOMAIN=.*|DOMAIN=$USER_DOMAIN|" .env
+    sed -i "s|SSL_EMAIL=.*|SSL_EMAIL=$USER_EMAIL|" .env
+    sed -i "s|JWT_SECRET=.*|JWT_SECRET=$jwt_secret|" .env
+    sed -i "s|COTURN_PASSWORD=.*|COTURN_PASSWORD=$coturn_password|" .env
+    sed -i "s|SESSION_SECRET=.*|SESSION_SECRET=$session_secret|" .env
+    sed -i "s|LIVEKIT_API_KEY=.*|LIVEKIT_API_KEY=$livekit_api_key|" .env
+    sed -i "s|LIVEKIT_API_SECRET=.*|LIVEKIT_API_SECRET=$livekit_api_secret|" .env
+    sed -i "s|POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$postgres_password|" .env
+    sed -i "s|DATABASE_URL=postgresql://svazapp:.*@db:5432/svazapp|DATABASE_URL=postgresql://svazapp:$postgres_password@db:5432/svazapp|" .env
+    sed -i "s|CORS_ORIGIN=.*|CORS_ORIGIN=https://$USER_DOMAIN|" .env
+
+    # Update URLs
+    if [ "$DEPLOYMENT_SCENARIO" = "standalone" ]; then
+        sed -i "s|NEXT_PUBLIC_API_URL=.*|NEXT_PUBLIC_API_URL=https://$USER_DOMAIN/api|" .env
+        sed -i "s|NEXT_PUBLIC_SOCKET_URL=.*|NEXT_PUBLIC_SOCKET_URL=https://$USER_DOMAIN|" .env
+        sed -i "s|LIVEKIT_PUBLIC_URL=.*|LIVEKIT_PUBLIC_URL=wss://$USER_DOMAIN/livekit|" .env
+    else
+        sed -i "s|NEXT_PUBLIC_API_URL=.*|NEXT_PUBLIC_API_URL=https://$USER_DOMAIN/api|" .env
+        sed -i "s|NEXT_PUBLIC_SOCKET_URL=.*|NEXT_PUBLIC_SOCKET_URL=https://$USER_DOMAIN|" .env
+        sed -i "s|LIVEKIT_PUBLIC_URL=.*|LIVEKIT_PUBLIC_URL=wss://$USER_DOMAIN/livekit|" .env
+    fi
+
+    print_success "Environment file generated"
+}
+
+# =============================================================================
+# INSTALLATION
+# =============================================================================
 
 # Clone repository
 clone_repository() {
-    print_header "CLONING REPOSITORY"
+    print_step "Cloning repository..."
 
-    if [ -d "${INSTALL_DIR}" ]; then
-        print_warning "Directory ${INSTALL_DIR} already exists"
-
-        if confirm "Remove existing directory and reinstall?" "n"; then
-            rm -rf "${INSTALL_DIR}"
+    if [ -d "$INSTALL_DIR" ]; then
+        print_warning "Directory $INSTALL_DIR already exists"
+        if ask_yes_no "Remove existing directory and continue?" "n"; then
+            sudo rm -rf "$INSTALL_DIR"
         else
             print_error "Installation cancelled"
             exit 1
         fi
     fi
 
-    print_info "Cloning repository to ${INSTALL_DIR}..."
+    sudo mkdir -p "$INSTALL_DIR"
+    sudo chown $USER:$USER "$INSTALL_DIR"
 
-    # Create parent directory if it doesn't exist
-    mkdir -p "$(dirname "${INSTALL_DIR}")"
+    git clone https://github.com/geladons/svazapp.git "$INSTALL_DIR"
+    cd "$INSTALL_DIR"
 
-    # Clone repository
-    git clone https://github.com/geladons/svazapp.git "${INSTALL_DIR}" 2>&1 | tee -a "${LOG_FILE}"
-
-    cd "${INSTALL_DIR}"
-
-    print_success "Repository cloned successfully"
+    print_success "Repository cloned"
 }
 
-# Configure environment variables
-configure_environment() {
-    print_header "CONFIGURING ENVIRONMENT"
+# Deploy services
+deploy_services() {
+    print_step "Deploying services..."
 
-    local domain="${USER_DOMAIN}"
-    local email="${USER_EMAIL}"
-
-    # Ask for domain if not provided
-    if [ -z "${domain}" ]; then
-        if [ "${UNATTENDED_MODE}" = true ]; then
-            domain="${DEFAULT_DOMAIN}"
-        else
-            read -p "Enter your domain name (e.g., svaz.app): " domain
-            domain=${domain:-${DEFAULT_DOMAIN}}
-        fi
+    local compose_file
+    if [ "$DEPLOYMENT_SCENARIO" = "standalone" ]; then
+        compose_file="docker-compose.yml"
+    else
+        compose_file="docker-compose.external-proxy.yml"
     fi
 
-    # Ask for email if not provided
-    if [ -z "${email}" ]; then
-        if [ "${UNATTENDED_MODE}" = true ]; then
-            email="${DEFAULT_EMAIL}"
-        else
-            read -p "Enter admin email for SSL certificates: " email
-            email=${email:-${DEFAULT_EMAIL}}
-        fi
-    fi
+    print_info "Using compose file: $compose_file"
 
-    print_info "Domain: ${domain}"
-    print_info "Email: ${email}"
+    # Pull images
+    docker compose -f "$compose_file" pull
 
-    # Generate secrets
-    print_info "Generating secure secrets..."
+    # Build services
+    docker compose -f "$compose_file" build
 
-    local jwt_secret=$(generate_random_string 64)
-    local jwt_refresh_secret=$(generate_random_string 64)
-    local session_secret=$(generate_random_string 64)
-    local postgres_password=$(generate_random_string 32)
-    local livekit_api_key="API$(generate_random_string 16)"
-    local livekit_api_secret=$(generate_random_string 64)
-    local coturn_password=$(generate_random_string 32)
+    # Start services
+    docker compose -f "$compose_file" up -d
 
-    # Create .env file from template
-    print_info "Creating .env file..."
-
-    cp .env.example .env
-
-    # Replace placeholders
-    sed -i "s|DOMAIN=svaz.app|DOMAIN=${domain}|g" .env
-    sed -i "s|SSL_EMAIL=admin@svaz.app|SSL_EMAIL=${email}|g" .env
-    sed -i "s|POSTGRES_PASSWORD=change_this_secure_password|POSTGRES_PASSWORD=${postgres_password}|g" .env
-    sed -i "s|JWT_SECRET=change_this_to_a_very_long_random_string_min_32_chars|JWT_SECRET=${jwt_secret}|g" .env
-    sed -i "s|SESSION_SECRET=change_this_to_another_very_long_random_string|SESSION_SECRET=${session_secret}|g" .env
-    sed -i "s|LIVEKIT_API_KEY=APIxxxxxxxxxxxxxxxx|LIVEKIT_API_KEY=${livekit_api_key}|g" .env
-    sed -i "s|LIVEKIT_API_SECRET=change_this_to_a_very_long_random_secret|LIVEKIT_API_SECRET=${livekit_api_secret}|g" .env
-    sed -i "s|COTURN_PASSWORD=change_this_secure_coturn_password|COTURN_PASSWORD=${coturn_password}|g" .env
-    sed -i "s|LIVEKIT_PUBLIC_URL=wss://\${DOMAIN}/livekit|LIVEKIT_PUBLIC_URL=wss://${domain}/livekit|g" .env
-    sed -i "s|NEXT_PUBLIC_API_URL=https://\${DOMAIN}/api|NEXT_PUBLIC_API_URL=https://${domain}/api|g" .env
-    sed -i "s|NEXT_PUBLIC_SOCKET_URL=https://\${DOMAIN}|NEXT_PUBLIC_SOCKET_URL=https://${domain}|g" .env
-    sed -i "s|NEXT_PUBLIC_LIVEKIT_URL=wss://\${DOMAIN}/livekit|NEXT_PUBLIC_LIVEKIT_URL=wss://${domain}/livekit|g" .env
-    sed -i "s|NEXT_PUBLIC_STUN_URL=stun:\${DOMAIN}:3478|NEXT_PUBLIC_STUN_URL=stun:${domain}:3478|g" .env
-    sed -i "s|NEXT_PUBLIC_TURN_URL=turn:\${DOMAIN}:3478|NEXT_PUBLIC_TURN_URL=turn:${domain}:3478|g" .env
-    sed -i "s|CORS_ORIGIN=https://\${DOMAIN}|CORS_ORIGIN=https://${domain}|g" .env
-    sed -i "s|COTURN_REALM=\${DOMAIN}|COTURN_REALM=${domain}|g" .env
-
-    # Set secure permissions
-    chmod 600 .env
-
-    print_success ".env file created with secure permissions"
-
-    # Create LiveKit config from template
-    print_info "Creating LiveKit configuration..."
-
-    sed "s|{LIVEKIT_API_KEY}|${livekit_api_key}|g; s|{LIVEKIT_API_SECRET}|${livekit_api_secret}|g" \
-        livekit/livekit.yaml.template > livekit/livekit.yaml
-
-    print_success "LiveKit configuration created"
-
-    # Save credentials to a secure file (shown once)
-    cat > "${INSTALL_DIR}/CREDENTIALS.txt" <<EOF
-=============================================================================
-SVAZ.APP INSTALLATION CREDENTIALS
-=============================================================================
-IMPORTANT: Save these credentials securely. This file will be deleted after
-you view it.
-
-Domain: ${domain}
-Admin Email: ${email}
-
-Database:
-  User: svazapp
-  Password: ${postgres_password}
-  Database: svazapp
-
-JWT:
-  Secret: ${jwt_secret}
-  Expires: 90 days
-
-LiveKit:
-  API Key: ${livekit_api_key}
-  API Secret: ${livekit_api_secret}
-
-CoTURN:
-  User: svazuser
-  Password: ${coturn_password}
-
-Session Secret: ${session_secret}
-
-=============================================================================
-Access URL: https://${domain}
-=============================================================================
-EOF
-
-    chmod 600 "${INSTALL_DIR}/CREDENTIALS.txt"
-
-    print_success "Environment configured successfully"
+    print_success "Services deployed"
 }
 
-# Deploy application
-deploy_application() {
-    print_header "DEPLOYING APPLICATION"
+# Verify installation
+verify_installation() {
+    print_step "Verifying installation..."
 
-    cd "${INSTALL_DIR}"
-
-    print_info "Pulling Docker images..."
-    docker compose pull 2>&1 | tee -a "${LOG_FILE}"
-
-    print_info "Building custom images..."
-    docker compose build 2>&1 | tee -a "${LOG_FILE}"
-
-    print_info "Starting services..."
-    docker compose up -d 2>&1 | tee -a "${LOG_FILE}"
-
-    print_success "Services started"
-}
-
-# Wait for services to be healthy
-wait_for_services() {
-    print_header "WAITING FOR SERVICES TO BE READY"
-
-    local max_wait=300  # 5 minutes
-    local elapsed=0
-    local interval=5
-
-    print_info "Waiting for services to be healthy (timeout: ${max_wait}s)..."
-
-    while [ ${elapsed} -lt ${max_wait} ]; do
-        local healthy=true
-
-        # Check database
-        if ! docker compose exec -T db pg_isready -U svazapp >/dev/null 2>&1; then
-            healthy=false
-        fi
-
-        # Check API
-        if ! docker compose exec -T api node -e "require('http').get('http://localhost:8080/api/health')" >/dev/null 2>&1; then
-            healthy=false
-        fi
-
-        if [ "${healthy}" = true ]; then
-            print_success "All services are healthy"
-            return 0
-        fi
-
-        sleep ${interval}
-        elapsed=$((elapsed + interval))
-        echo -n "." | tee -a "${LOG_FILE}"
-    done
-
-    echo "" | tee -a "${LOG_FILE}"
-    print_warning "Services did not become healthy within ${max_wait}s"
-    print_info "You can check service status with: docker compose ps"
-    print_info "View logs with: docker compose logs"
-}
-
-# Run health checks
-run_health_checks() {
-    print_header "RUNNING HEALTH CHECKS"
-
-    cd "${INSTALL_DIR}"
-
-    local all_passed=true
-
-    # Check database
-    print_info "Checking database..."
-    if docker compose exec -T db pg_isready -U svazapp >/dev/null 2>&1; then
-        print_success "✓ Database is running"
+    local compose_file
+    if [ "$DEPLOYMENT_SCENARIO" = "standalone" ]; then
+        compose_file="docker-compose.yml"
     else
-        print_error "✗ Database is not responding"
-        all_passed=false
+        compose_file="docker-compose.external-proxy.yml"
     fi
 
-    # Check API
-    print_info "Checking API..."
-    if docker compose exec -T api node -e "require('http').get('http://localhost:8080/api/health')" >/dev/null 2>&1; then
-        print_success "✓ API is running"
-    else
-        print_error "✗ API is not responding"
-        all_passed=false
-    fi
+    # Wait for services to start
+    sleep 10
 
-    # Check frontend
-    print_info "Checking frontend..."
-    if docker compose exec -T frontend node -e "require('http').get('http://localhost:3000')" >/dev/null 2>&1; then
-        print_success "✓ Frontend is running"
-    else
-        print_error "✗ Frontend is not responding"
-        all_passed=false
-    fi
+    # Check if all containers are running
+    local running_containers=$(docker compose -f "$compose_file" ps --services --filter "status=running" | wc -l)
+    local total_containers=$(docker compose -f "$compose_file" ps --services | wc -l)
 
-    # Check LiveKit
-    print_info "Checking LiveKit..."
-    if docker compose ps livekit | grep -q "Up"; then
-        print_success "✓ LiveKit is running"
+    if [ "$running_containers" -eq "$total_containers" ]; then
+        print_success "All services are running ($running_containers/$total_containers)"
     else
-        print_error "✗ LiveKit is not running"
-        all_passed=false
-    fi
-
-    # Check CoTURN
-    print_info "Checking CoTURN..."
-    if docker compose ps coturn | grep -q "Up"; then
-        print_success "✓ CoTURN is running"
-    else
-        print_error "✗ CoTURN is not running"
-        all_passed=false
-    fi
-
-    # Check Caddy
-    print_info "Checking Caddy..."
-    if docker compose ps caddy | grep -q "Up"; then
-        print_success "✓ Caddy is running"
-    else
-        print_error "✗ Caddy is not running"
-        all_passed=false
-    fi
-
-    if [ "${all_passed}" = true ]; then
-        print_success "All health checks passed!"
-    else
-        print_warning "Some health checks failed. Check logs with: docker compose logs"
+        print_warning "Some services may not be running ($running_containers/$total_containers)"
+        print_info "Check logs with: docker compose -f $compose_file logs"
     fi
 }
 
-# Cleanup
-cleanup() {
-    print_header "CLEANUP"
+# Print post-installation instructions
+print_post_install() {
+    print_header "Installation Complete!"
 
-    cd "${INSTALL_DIR}"
-
-    # Set secure permissions on .env
-    chmod 600 .env
-
-    print_success "Cleanup completed"
-}
-
-# Print final report
-print_final_report() {
-    print_header "INSTALLATION COMPLETE!"
-
-    local domain=$(grep "^DOMAIN=" "${INSTALL_DIR}/.env" | cut -d'=' -f2)
-
-    echo ""
-    echo "╔═══════════════════════════════════════════════════════════════════════════╗"
-    echo "║                    SVAZ.APP INSTALLATION SUCCESSFUL!                      ║"
-    echo "╚═══════════════════════════════════════════════════════════════════════════╝"
-    echo ""
-    echo "🎉 Your svaz.app instance is now running!"
-    echo ""
-    echo "📍 Access URL:"
-    echo "   https://${domain}"
-    echo ""
-    echo "🔐 Credentials:"
-    echo "   Your credentials have been saved to:"
-    echo "   ${INSTALL_DIR}/CREDENTIALS.txt"
-    echo ""
-    echo "   ⚠️  IMPORTANT: View and save these credentials now!"
-    echo "   This file contains sensitive information and should be stored securely."
-    echo ""
-    echo "📊 Service Status:"
-    docker compose ps --format "table {{.Service}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || true
-    echo ""
-    echo "📝 Next Steps:"
-    echo ""
-    echo "   1. View your credentials:"
-    echo "      cat ${INSTALL_DIR}/CREDENTIALS.txt"
-    echo ""
-    echo "   2. Access your application:"
-    echo "      https://${domain}"
-    echo ""
-    echo "   3. Create your first user account by registering on the website"
-    echo ""
-    echo "   4. (Optional) Delete the credentials file after saving:"
-    echo "      rm ${INSTALL_DIR}/CREDENTIALS.txt"
-    echo ""
-    echo "🔧 Useful Commands:"
-    echo ""
-    echo "   View logs:"
-    echo "      cd ${INSTALL_DIR} && docker compose logs -f"
-    echo ""
-    echo "   View specific service logs:"
-    echo "      cd ${INSTALL_DIR} && docker compose logs -f [service]"
-    echo "      Services: api, frontend, db, livekit, coturn, caddy"
-    echo ""
-    echo "   Restart services:"
-    echo "      cd ${INSTALL_DIR} && docker compose restart"
-    echo ""
-    echo "   Stop services:"
-    echo "      cd ${INSTALL_DIR} && docker compose down"
-    echo ""
-    echo "   Start services:"
-    echo "      cd ${INSTALL_DIR} && docker compose up -d"
-    echo ""
-    echo "   Update application:"
-    echo "      cd ${INSTALL_DIR} && git pull && docker compose up -d --build"
-    echo ""
-    echo "📚 Documentation:"
-    echo "   - README: ${INSTALL_DIR}/README.md"
-    echo "   - Deployment Guide: ${INSTALL_DIR}/DEPLOYMENT.md"
-    echo "   - Development Guide: ${INSTALL_DIR}/DEVELOPMENT.md"
-    echo ""
-    echo "🐛 Troubleshooting:"
-    echo "   If you encounter issues, check the logs:"
-    echo "      cd ${INSTALL_DIR} && docker compose logs"
-    echo ""
-    echo "   For more help, visit:"
-    echo "      https://github.com/geladons/svazapp/issues"
-    echo ""
-    echo "═══════════════════════════════════════════════════════════════════════════"
+    echo -e "${GREEN}✓${NC} ${BOLD}svaz.app has been successfully installed!${NC}"
     echo ""
 
-    # Ask if user wants to view credentials now
-    if [ "${UNATTENDED_MODE}" = false ]; then
-        if confirm "Would you like to view your credentials now?" "y"; then
-            echo ""
-            cat "${INSTALL_DIR}/CREDENTIALS.txt"
-            echo ""
-
-            if confirm "Delete credentials file now? (Make sure you saved them!)" "n"; then
-                rm "${INSTALL_DIR}/CREDENTIALS.txt"
-                print_success "Credentials file deleted"
-            else
-                print_warning "Remember to delete ${INSTALL_DIR}/CREDENTIALS.txt after saving the credentials!"
-            fi
-        fi
+    if [ "$DEPLOYMENT_SCENARIO" = "standalone" ]; then
+        echo -e "${BOLD}Next Steps:${NC}"
+        echo ""
+        echo -e "1. ${CYAN}Wait for SSL certificate${NC} (may take 1-2 minutes)"
+        echo "   Caddy will automatically obtain a Let's Encrypt certificate"
+        echo ""
+        echo -e "2. ${CYAN}Access your application:${NC}"
+        echo "   https://$USER_DOMAIN"
+        echo ""
+        echo -e "3. ${CYAN}Check service status:${NC}"
+        echo "   cd $INSTALL_DIR"
+        echo "   docker compose ps"
+        echo ""
+        echo -e "4. ${CYAN}View logs:${NC}"
+        echo "   docker compose logs -f"
+        echo ""
+    else
+        echo -e "${BOLD}Next Steps:${NC}"
+        echo ""
+        echo -e "1. ${CYAN}Configure your reverse proxy (NPM/Traefik):${NC}"
+        echo "   - Create ONE proxy host for: $USER_DOMAIN"
+        echo "   - Forward / to: your-vps-ip:3000 (Frontend)"
+        echo "   - Add custom location /api to: your-vps-ip:8080"
+        echo "   - Add custom location /livekit to: your-vps-ip:7880"
+        echo "   - Enable WebSocket support on all locations"
+        echo ""
+        echo -e "2. ${CYAN}Configure router port forwarding:${NC}"
+        echo "   - Forward ports 3478, 5349, 49152-65535 to your VPS"
+        echo "   - These ports are for CoTURN (cannot be proxied)"
+        echo ""
+        echo -e "3. ${CYAN}Access your application:${NC}"
+        echo "   https://$USER_DOMAIN"
+        echo ""
+        echo -e "4. ${CYAN}Check service status:${NC}"
+        echo "   cd $INSTALL_DIR"
+        echo "   docker compose -f docker-compose.external-proxy.yml ps"
+        echo ""
     fi
+
+    echo -e "${BOLD}Useful Commands:${NC}"
+    echo ""
+    echo "  View logs:        docker compose logs -f"
+    echo "  Restart services: docker compose restart"
+    echo "  Stop services:    docker compose down"
+    echo "  Update:           git pull && docker compose up -d --build"
+    echo ""
+
+    echo -e "${BOLD}Documentation:${NC}"
+    echo "  📖 Full guide: https://github.com/geladons/svazapp/blob/main/DEPLOYMENT.md"
+    echo "  🔧 Ports:      https://github.com/geladons/svazapp/blob/main/PORTS.md"
+    echo "  ⚙️  ENV vars:   https://github.com/geladons/svazapp/blob/main/ENV_VARIABLES.md"
+    echo ""
+
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}  🎉 Enjoy your svaz.app installation!${NC}"
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
 }
 
-# Main installation function
+# =============================================================================
+# MAIN FUNCTION
+# =============================================================================
+
 main() {
     # Print banner
-    echo ""
-    echo "╔═══════════════════════════════════════════════════════════════════════════╗"
-    echo "║                                                                           ║"
-    echo "║                    SVAZ.APP AUTOMATED INSTALLER v${VERSION}                    ║"
-    echo "║                                                                           ║"
-    echo "║          Self-hosted video calling and messaging platform                ║"
-    echo "║                  with automatic P2P failover                              ║"
-    echo "║                                                                           ║"
-    echo "╚═══════════════════════════════════════════════════════════════════════════╝"
-    echo ""
-
-    # Initialize log file
-    echo "Installation started at $(date)" > "${LOG_FILE}"
-
-    # Parse arguments
-    parse_arguments "$@"
+    print_banner
 
     # Detect OS
     detect_os
 
-    # Check system requirements
-    check_system_requirements
+    # Check requirements
+    check_requirements
 
-    # Install dependencies
-    install_dependencies
+    echo ""
 
-    # Configure firewall
-    configure_firewall
+    # Interactive menus
+    select_deployment_scenario
+    select_installation_mode
 
-    # Clone repository
+    # Collect configuration
+    if [ "$INSTALLATION_MODE" = "quick" ]; then
+        collect_config_quick
+    else
+        collect_config_advanced
+    fi
+
+    # Confirm installation
+    print_header "Ready to Install"
+    echo -e "${BOLD}Installation Summary:${NC}"
+    echo ""
+    echo "  Deployment Scenario: ${CYAN}$DEPLOYMENT_SCENARIO${NC}"
+    echo "  Installation Mode:   ${CYAN}$INSTALLATION_MODE${NC}"
+    echo "  Domain:              ${CYAN}$USER_DOMAIN${NC}"
+    echo "  Email:               ${CYAN}$USER_EMAIL${NC}"
+    echo "  Install Directory:   ${CYAN}$INSTALL_DIR${NC}"
+    echo ""
+
+    if ! ask_yes_no "Proceed with installation?" "y"; then
+        print_error "Installation cancelled by user"
+        exit 0
+    fi
+
+    # Start installation
+    print_header "Installing Dependencies"
+
+    install_docker
+    install_git
+
+    print_header "Cloning Repository"
     clone_repository
 
-    # Configure environment
-    configure_environment
+    print_header "Generating Configuration"
+    generate_env_file
 
-    # Deploy application
-    deploy_application
+    print_header "Configuring Firewall"
+    configure_firewall
 
-    # Wait for services
-    wait_for_services
+    print_header "Deploying Services"
+    deploy_services
 
-    # Run health checks
-    run_health_checks
+    print_header "Verifying Installation"
+    verify_installation
 
-    # Cleanup
-    cleanup
-
-    # Print final report
-    print_final_report
-
-    print_success "Installation completed successfully!"
-    echo "Log file: ${LOG_FILE}"
+    # Print post-installation instructions
+    print_post_install
 }
+
+# =============================================================================
+# ENTRY POINT
+# =============================================================================
 
 # Run main function
 main "$@"
+
 

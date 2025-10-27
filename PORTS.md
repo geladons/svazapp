@@ -2,18 +2,39 @@
 
 This document describes all network ports used by svaz.app and how to configure them.
 
+> **Note:** Port configuration differs between deployment scenarios. Choose the section that matches your setup.
+
 ## Table of Contents
 
-- [Default Port Configuration](#default-port-configuration)
-- [Required Ports (Must Be Open)](#required-ports-must-be-open)
-- [Optional Ports](#optional-ports)
+- [Deployment Scenarios](#deployment-scenarios)
+- [Scenario A: Standalone VPS (with Caddy)](#scenario-a-standalone-vps-with-caddy)
+- [Scenario B: External Reverse Proxy (NPM/Traefik)](#scenario-b-external-reverse-proxy-npmtraefik)
 - [Changing Default Ports](#changing-default-ports)
 - [Firewall Configuration](#firewall-configuration)
-- [Using External Reverse Proxy](#using-external-reverse-proxy)
+- [Troubleshooting](#troubleshooting)
 
 ---
 
-## Default Port Configuration
+## Deployment Scenarios
+
+svaz.app supports two deployment scenarios with different port configurations:
+
+### 🟢 Scenario A: Standalone VPS (with Caddy)
+
+- Caddy handles SSL and reverse proxy
+- Only external ports (80, 443, CoTURN) are exposed
+- Internal services (frontend, API, LiveKit) are not exposed
+
+### 🔵 Scenario B: External Reverse Proxy (NPM/Traefik)
+
+- Your reverse proxy handles SSL
+- Caddy is NOT used
+- Frontend, API, and LiveKit ports are exposed for your reverse proxy
+- CoTURN ports are still exposed directly
+
+---
+
+## Scenario A: Standalone VPS (with Caddy)
 
 ### External Ports (Exposed to Internet)
 
@@ -33,9 +54,110 @@ This document describes all network ports used by svaz.app and how to configure 
 | **3000** | Frontend | Next.js application | ❌ No |
 | **8080** | API | Fastify backend | ❌ No |
 | **5432** | PostgreSQL | Database | ✅ Yes (for dev) |
-| **7880** | LiveKit | SFU server (HTTP) | ❌ No |
-| **7881** | LiveKit | SFU server (WebRTC) | ❌ No |
+| **7880** | LiveKit | SFU server (WebSocket) | ❌ No |
 | **2019** | Caddy | Admin API | ❌ No |
+
+**Firewall Rules (Scenario A):**
+
+```bash
+# Allow SSH
+sudo ufw allow 22/tcp
+
+# Allow HTTP/HTTPS (Caddy)
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw allow 443/udp
+
+# Allow STUN/TURN (CoTURN)
+sudo ufw allow 3478/tcp
+sudo ufw allow 3478/udp
+sudo ufw allow 5349/tcp
+sudo ufw allow 5349/udp
+sudo ufw allow 49152:65535/udp
+
+# Enable firewall
+sudo ufw enable
+```
+
+---
+
+## Scenario B: External Reverse Proxy (NPM/Traefik)
+
+### External Ports (Exposed to Internet via Router)
+
+| Port | Protocol | Service | Purpose | Required |
+|------|----------|---------|---------|----------|
+| **80** | TCP | NPM/Traefik | HTTP (redirects to HTTPS) | ✅ Yes |
+| **443** | TCP | NPM/Traefik | HTTPS (main application) | ✅ Yes |
+| **3478** | UDP/TCP | CoTURN | STUN server | ✅ Yes |
+| **5349** | UDP/TCP | CoTURN | TURNS (STUN over TLS) | ⚠️ Optional |
+| **49152-65535** | UDP | CoTURN | TURN relay port range | ✅ Yes |
+
+### Exposed Ports (VPS to Reverse Proxy)
+
+| Port | Service | Purpose | Exposed to Host |
+|------|---------|---------|-----------------|
+| **3000** | Frontend | Next.js application | ✅ Yes |
+| **8080** | API | Fastify backend | ✅ Yes |
+| **7880** | LiveKit | SFU server (WebSocket) | ✅ Yes |
+| **5432** | PostgreSQL | Database | ✅ Yes (for dev) |
+| **3478** | CoTURN | STUN/TURN | ✅ Yes |
+| **5349** | CoTURN | TURNS (TLS) | ✅ Yes |
+| **49152-65535** | CoTURN | TURN relay range | ✅ Yes |
+
+**Router Port Forwarding (Scenario B):**
+
+Forward these ports from your router to the appropriate servers:
+
+| External Port | Internal IP | Internal Port | Protocol | Destination |
+|---------------|-------------|---------------|----------|-------------|
+| 80 | NPM IP | 80 | TCP | NPM Server |
+| 443 | NPM IP | 443 | TCP | NPM Server |
+| 3478 | VPS IP | 3478 | TCP+UDP | svaz.app VPS |
+| 5349 | VPS IP | 5349 | TCP+UDP | svaz.app VPS |
+| 49152-65535 | VPS IP | 49152-65535 | UDP | svaz.app VPS |
+
+**Firewall Rules (Scenario B - VPS):**
+
+```bash
+# Allow SSH
+sudo ufw allow 22/tcp
+
+# Allow Frontend (for NPM)
+sudo ufw allow 3000/tcp
+
+# Allow API (for NPM)
+sudo ufw allow 8080/tcp
+
+# Allow LiveKit (for NPM)
+sudo ufw allow 7880/tcp
+
+# Allow STUN/TURN (direct from internet)
+sudo ufw allow 3478/tcp
+sudo ufw allow 3478/udp
+sudo ufw allow 5349/tcp
+sudo ufw allow 5349/udp
+sudo ufw allow 49152:65535/udp
+
+# Enable firewall
+sudo ufw enable
+```
+
+**NPM Configuration (Scenario B):**
+
+Create **ONE** proxy host in NPM with these settings:
+
+**Main Proxy Host:**
+- **Domain**: `svaz.app`
+- **Forward to**: `vps-ip:3000` (Frontend)
+- **WebSocket Support**: ✅ Enabled
+
+**Custom Locations:**
+1. `/api` → `vps-ip:8080` (WebSocket: ✅)
+2. `/livekit` → `vps-ip:7880` (WebSocket: ✅)
+3. `/socket.io` → `vps-ip:8080` (WebSocket: ✅)
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed NPM configuration.
 
 ---
 
