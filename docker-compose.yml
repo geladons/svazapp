@@ -126,7 +126,9 @@ services:
   # COTURN SERVICE (STUN/TURN Server)
   # =============================================================================
   coturn:
-    image: coturn/coturn:latest
+    build:
+      context: ./coturn
+      dockerfile: Dockerfile
     container_name: svazapp-coturn
     restart: unless-stopped
     ports:
@@ -143,8 +145,6 @@ services:
       PASSWORD: ${COTURN_PASSWORD}
       MIN_PORT: ${COTURN_MIN_PORT}
       MAX_PORT: ${COTURN_MAX_PORT}
-    volumes:
-      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf
     networks:
       - svazapp-network
 
