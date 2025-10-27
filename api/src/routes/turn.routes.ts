@@ -57,7 +57,7 @@ export default async function turnRoutes(fastify: FastifyInstance) {
         },
       },
     },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (_request: FastifyRequest, reply: FastifyReply) => {
       try {
         // Get TURN configuration from environment
         const turnUrl = process.env.NEXT_PUBLIC_TURN_URL;
@@ -80,7 +80,7 @@ export default async function turnRoutes(fastify: FastifyInstance) {
 
         return reply.send(credentials);
       } catch (error) {
-        fastify.log.error('Error generating TURN credentials:', error);
+        fastify.log.error({ err: error }, 'Error generating TURN credentials');
         return reply.status(500).send({
           error: 'Failed to generate TURN credentials',
           message: error instanceof Error ? error.message : 'Unknown error',
@@ -141,7 +141,7 @@ export default async function turnRoutes(fastify: FastifyInstance) {
         },
       },
     },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (_request: FastifyRequest, reply: FastifyReply) => {
       try {
         // Get TURN configuration from environment
         const stunUrl = process.env.NEXT_PUBLIC_STUN_URL;
@@ -182,7 +182,7 @@ export default async function turnRoutes(fastify: FastifyInstance) {
 
         return reply.send({ iceServers });
       } catch (error) {
-        fastify.log.error('Error generating ICE servers configuration:', error);
+        fastify.log.error({ err: error }, 'Error generating ICE servers configuration');
         return reply.status(500).send({
           error: 'Failed to generate ICE servers configuration',
           message: error instanceof Error ? error.message : 'Unknown error',
