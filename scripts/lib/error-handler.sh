@@ -143,7 +143,35 @@ provide_error_help() {
         echo -e "  ${GREEN}•${NC} Check disk space: ${CYAN}df -h${NC}"
         return 0
     fi
-    
+
+    # Certbot errors
+    if [[ "$command" == *"certbot"* ]]; then
+        echo -e "${BOLD}Possible causes:${NC}"
+        echo -e "  ${YELLOW}•${NC} Invalid DNS API token"
+        echo -e "  ${YELLOW}•${NC} DNS not pointing to this server"
+        echo -e "  ${YELLOW}•${NC} Rate limit exceeded (5 certs/week per domain)"
+        echo -e "  ${YELLOW}•${NC} DNS propagation timeout"
+        echo ""
+        echo -e "${BOLD}Suggested fixes:${NC}"
+        echo -e "  ${GREEN}•${NC} Verify API token is correct"
+        echo -e "  ${GREEN}•${NC} Check DNS: ${CYAN}dig $USER_DOMAIN${NC}"
+        echo -e "  ${GREEN}•${NC} Wait 1 hour and try again (rate limit)"
+        echo -e "  ${GREEN}•${NC} Use manual setup: see coturn-certs/README.md"
+        return 0
+    fi
+
+    # Crontab errors
+    if [[ "$command" == *"crontab"* ]]; then
+        echo -e "${BOLD}Possible causes:${NC}"
+        echo -e "  ${YELLOW}•${NC} Cron service not running"
+        echo -e "  ${YELLOW}•${NC} Permission issues"
+        echo ""
+        echo -e "${BOLD}Suggested fixes:${NC}"
+        echo -e "  ${GREEN}•${NC} Check cron service: ${CYAN}systemctl status cron${NC}"
+        echo -e "  ${GREEN}•${NC} Start cron: ${CYAN}systemctl start cron${NC}"
+        return 0
+    fi
+
     # Generic error
     echo -e "${BOLD}Suggested fixes:${NC}"
     echo -e "  ${GREEN}•${NC} Check the error message above for details"

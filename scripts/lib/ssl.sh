@@ -21,9 +21,38 @@ setup_coturn_ssl() {
     if [ "$DEPLOYMENT_SCENARIO" != "external-proxy" ]; then
         return 0
     fi
-    
+
+    # Check if certificates already exist
+    if [ -f "$INSTALL_DIR/coturn-certs/fullchain.pem" ] && [ -f "$INSTALL_DIR/coturn-certs/privkey.pem" ]; then
+        print_success "SSL certificates already exist in coturn-certs/"
+        echo ""
+        echo -e "${BOLD}Existing certificates found.${NC}"
+        echo -e "Do you want to:"
+        echo -e "  1) Keep existing certificates (skip SSL setup)"
+        echo -e "  2) Obtain new certificates (will overwrite)"
+        echo ""
+
+        read -p "$(echo -e ${CYAN}Your choice [1-2]: ${NC})" choice </dev/tty
+
+        case $choice in
+            1)
+                print_info "Keeping existing certificates"
+                COTURN_SSL_METHOD="manual"  # Mark as manual to skip in post-install
+                return 0
+                ;;
+            2)
+                print_info "Will obtain new certificates"
+                ;;
+            *)
+                print_warning "Invalid choice, keeping existing certificates"
+                COTURN_SSL_METHOD="manual"
+                return 0
+                ;;
+        esac
+    fi
+
     print_header "STEP: Configure SSL for CoTURN TURNS"
-    
+
     echo -e "${BOLD}CoTURN requires SSL certificates for TURNS (port 5349).${NC}"
     echo -e "${YELLOW}This is CRITICAL for video calls in DPI-restricted networks (Russia, China, etc.)${NC}"
     echo ""
@@ -325,14 +354,31 @@ obtain_certificate_dns() {
             ;;
     esac
     
+    # Verify certificates exist
+    if [ ! -f "$cert_dir/fullchain.pem" ] || [ ! -f "$cert_dir/privkey.pem" ]; then
+        print_error "Certificate files not found in $cert_dir"
+        print_info "Certbot may have failed silently"
+        exit 1
+    fi
+
+    # Ensure coturn-certs directory exists
+    mkdir -p "$INSTALL_DIR/coturn-certs"
+
     # Copy certificates to coturn-certs
-    cp "$cert_dir/fullchain.pem" "$INSTALL_DIR/coturn-certs/"
-    cp "$cert_dir/privkey.pem" "$INSTALL_DIR/coturn-certs/"
-    
+    cp "$cert_dir/fullchain.pem" "$INSTALL_DIR/coturn-certs/" || {
+        print_error "Failed to copy fullchain.pem"
+        exit 1
+    }
+
+    cp "$cert_dir/privkey.pem" "$INSTALL_DIR/coturn-certs/" || {
+        print_error "Failed to copy privkey.pem"
+        exit 1
+    }
+
     # Set permissions
     chmod 644 "$INSTALL_DIR/coturn-certs/fullchain.pem"
     chmod 600 "$INSTALL_DIR/coturn-certs/privkey.pem"
-    
+
     print_success "SSL certificate obtained and copied to coturn-certs/"
 }
 
@@ -353,19 +399,31 @@ handle_certbot_error() {
 
 setup_auto_renewal() {
     print_step "Setting up automatic certificate renewal..."
-    
+
     local renewal_script="$INSTALL_DIR/renew-coturn-certs.sh"
-    local creds_file="$DNS_CREDENTIALS_DIR"
-    
-    # Create renewal script
-    cat > "$renewal_script" << EOF
+
+    # Validate INSTALL_DIR
+    if [ -z "$INSTALL_DIR" ]; then
+        print_error "INSTALL_DIR is not set"
+        return 1
+    fi
+
+    # Create renewal script with absolute paths
+    cat > "$renewal_script" << 'EOF'
 #!/bin/bash
 # Automatic SSL certificate renewal for CoTURN
+# This script is run monthly by cron
+
+set -e
 
 # Renew certificate
 certbot renew --quiet
 
 # Copy to coturn-certs
+EOF
+
+    # Add domain-specific commands (variables will be expanded here)
+    cat >> "$renewal_script" << EOF
 cp /etc/letsencrypt/live/$USER_DOMAIN/fullchain.pem $INSTALL_DIR/coturn-certs/
 cp /etc/letsencrypt/live/$USER_DOMAIN/privkey.pem $INSTALL_DIR/coturn-certs/
 
@@ -373,12 +431,28 @@ cp /etc/letsencrypt/live/$USER_DOMAIN/privkey.pem $INSTALL_DIR/coturn-certs/
 cd $INSTALL_DIR
 docker compose -f docker-compose.external-proxy.yml restart coturn
 EOF
-    
+
     chmod +x "$renewal_script"
-    
-    # Add to crontab (runs monthly on 1st day at midnight)
-    (crontab -l 2>/dev/null | grep -v "renew-coturn-certs.sh"; echo "0 0 1 * * $renewal_script") | crontab -
-    
+
+    # Add to crontab safely (handle empty crontab)
+    local temp_cron=$(mktemp)
+
+    # Get existing crontab (ignore error if empty)
+    crontab -l > "$temp_cron" 2>/dev/null || true
+
+    # Remove old renew-coturn-certs entries
+    grep -v "renew-coturn-certs.sh" "$temp_cron" > "${temp_cron}.new" 2>/dev/null || true
+    mv "${temp_cron}.new" "$temp_cron"
+
+    # Add new entry
+    echo "0 0 1 * * $renewal_script" >> "$temp_cron"
+
+    # Install new crontab
+    crontab "$temp_cron"
+
+    # Cleanup
+    rm -f "$temp_cron"
+
     print_success "Automatic renewal configured (runs monthly)"
 }
 
@@ -394,13 +468,29 @@ ask_delete_credentials() {
     echo -e "These credentials are only needed for certificate renewal."
     echo -e "You can delete them now if you prefer manual renewal every 90 days."
     echo ""
-    
-    if ask_yes_no "Delete DNS API credentials now?" "n"; then
-        rm -rf "$DNS_CREDENTIALS_DIR"
-        print_success "DNS API credentials deleted"
-        print_warning "You will need to manually renew certificates every 90 days"
+
+    # Check if ask_yes_no function exists
+    if ! type ask_yes_no &>/dev/null; then
+        # Fallback: simple read
+        read -p "Delete DNS API credentials now? (y/N): " response </dev/tty
+        response=${response,,}  # Convert to lowercase
+
+        if [[ "$response" == "y" || "$response" == "yes" ]]; then
+            rm -rf "$DNS_CREDENTIALS_DIR"
+            print_success "DNS API credentials deleted"
+            print_warning "You will need to manually renew certificates every 90 days"
+        else
+            print_info "DNS API credentials kept for automatic renewal"
+        fi
     else
-        print_info "DNS API credentials kept for automatic renewal"
+        # Use ask_yes_no if available
+        if ask_yes_no "Delete DNS API credentials now?" "n"; then
+            rm -rf "$DNS_CREDENTIALS_DIR"
+            print_success "DNS API credentials deleted"
+            print_warning "You will need to manually renew certificates every 90 days"
+        else
+            print_info "DNS API credentials kept for automatic renewal"
+        fi
     fi
 }
 
