@@ -74,16 +74,41 @@ check_git() {
     if ! command -v git &> /dev/null; then
         print_error "Git is not installed"
         print_step "Installing Git..."
-        
+
         if command -v apt-get &> /dev/null; then
-            sudo apt-get update && sudo apt-get install -y git
+            # Try to update package lists with retry
+            local max_attempts=3
+            local attempt=1
+
+            while [ $attempt -le $max_attempts ]; do
+                if [ $attempt -gt 1 ]; then
+                    echo -e "${YELLOW}⚠${NC} Retry attempt $attempt/$max_attempts (waiting 10s)..."
+                    sleep 10
+                fi
+
+                if sudo apt-get update 2>&1 | grep -q "Mirror sync in progress\|Hash Sum mismatch\|File has unexpected size"; then
+                    echo -e "${YELLOW}⚠${NC} Ubuntu mirrors are syncing (temporary issue)"
+                    attempt=$((attempt + 1))
+                    continue
+                fi
+
+                # Update succeeded or failed with different error
+                break
+            done
+
+            # Install Git
+            sudo apt-get install -y git || {
+                print_error "Failed to install Git"
+                print_info "Please install Git manually: sudo apt-get install git"
+                exit 1
+            }
         elif command -v yum &> /dev/null; then
             sudo yum install -y git
         else
             print_error "Cannot install Git automatically. Please install it manually."
             exit 1
         fi
-        
+
         print_success "Git installed"
     fi
 }
@@ -95,7 +120,40 @@ cleanup() {
     fi
 }
 
+# Handle errors
+handle_bootstrap_error() {
+    local exit_code=$?
+
+    if [ $exit_code -ne 0 ]; then
+        echo ""
+        echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${RED}${BOLD}  ❌ BOOTSTRAP FAILED${NC}"
+        echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+        echo -e "${BOLD}Failed to download installer from GitHub.${NC}"
+        echo ""
+        echo -e "${BOLD}Possible causes:${NC}"
+        echo -e "  ${YELLOW}•${NC} No internet connection"
+        echo -e "  ${YELLOW}•${NC} GitHub is not accessible"
+        echo -e "  ${YELLOW}•${NC} Git is not installed"
+        echo ""
+        echo -e "${BOLD}Suggested fixes:${NC}"
+        echo -e "  ${GREEN}•${NC} Check internet: ${CYAN}ping -c 3 google.com${NC}"
+        echo -e "  ${GREEN}•${NC} Check GitHub: ${CYAN}curl -I https://github.com${NC}"
+        echo -e "  ${GREEN}•${NC} Install Git: ${CYAN}sudo apt-get install git${NC}"
+        echo ""
+        echo -e "${BOLD}Alternative: Manual installation${NC}"
+        echo "  git clone https://github.com/geladons/svazapp.git"
+        echo "  cd svazapp"
+        echo "  sudo bash scripts/installer.sh"
+        echo ""
+        echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+    fi
+}
+
 trap cleanup EXIT
+trap handle_bootstrap_error ERR
 
 # =============================================================================
 # MAIN FUNCTION
@@ -108,14 +166,18 @@ main() {
     
     # Check Git
     check_git
-    
+
     # Create temporary directory
     mkdir -p "$INSTALLER_DIR"
     cd "$INSTALLER_DIR"
-    
+
     # Clone repository
     print_step "Downloading installer..."
-    git clone --depth 1 --branch "$BRANCH" "$REPO_URL" . > /dev/null 2>&1
+    if ! git clone --depth 1 --branch "$BRANCH" "$REPO_URL" . > /dev/null 2>&1; then
+        print_error "Failed to clone repository from GitHub"
+        print_info "Trying without depth limit..."
+        git clone --branch "$BRANCH" "$REPO_URL" . || exit 1
+    fi
     
     if [ ! -f "scripts/installer.sh" ]; then
         print_error "Installer script not found in repository"

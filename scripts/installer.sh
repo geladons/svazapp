@@ -48,12 +48,16 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Source helper modules
 source "$SCRIPT_DIR/lib/colors.sh"
+source "$SCRIPT_DIR/lib/error-handler.sh"
 source "$SCRIPT_DIR/lib/validators.sh"
 source "$SCRIPT_DIR/lib/system.sh"
 source "$SCRIPT_DIR/lib/docker.sh"
 source "$SCRIPT_DIR/lib/config.sh"
 source "$SCRIPT_DIR/lib/ssl.sh"
 source "$SCRIPT_DIR/lib/deploy.sh"
+
+# Setup error handling
+setup_error_trap
 
 # =============================================================================
 # INTERACTIVE MENUS
