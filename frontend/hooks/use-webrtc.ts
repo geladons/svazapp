@@ -465,16 +465,33 @@ export function useWebRTC(): UseWebRTCReturn {
    * Handle incoming signaling messages
    */
   useEffect(() => {
-    const handleSignalAnswer = async (data: {
-      from: string;
-      answer: RTCSessionDescriptionInit;
-    }) => {
-      console.log('[WebRTC] Received answer from:', data.from);
+    const handleSignalAnswer = async (...args: unknown[]) => {
+      // Type guard: validate incoming data structure
+      const data = args[0];
+      if (
+        !data ||
+        typeof data !== 'object' ||
+        !('from' in data) ||
+        !('answer' in data) ||
+        typeof (data as { from: unknown }).from !== 'string' ||
+        typeof (data as { answer: unknown }).answer !== 'object' ||
+        !(data as { answer: unknown }).answer
+      ) {
+        console.error('[WebRTC] Invalid signal-answer data:', data);
+        return;
+      }
+
+      const validatedData = data as {
+        from: string;
+        answer: RTCSessionDescriptionInit;
+      };
+
+      console.log('[WebRTC] Received answer from:', validatedData.from);
 
       if (peerConnectionRef.current) {
         try {
           await peerConnectionRef.current.setRemoteDescription(
-            new RTCSessionDescription(data.answer)
+            new RTCSessionDescription(validatedData.answer)
           );
         } catch (error) {
           console.error('[WebRTC] Error setting remote description:', error);
@@ -482,16 +499,33 @@ export function useWebRTC(): UseWebRTCReturn {
       }
     };
 
-    const handleSignalIceCandidate = async (data: {
-      from: string;
-      candidate: RTCIceCandidateInit;
-    }) => {
-      console.log('[WebRTC] Received ICE candidate from:', data.from);
+    const handleSignalIceCandidate = async (...args: unknown[]) => {
+      // Type guard: validate incoming data structure
+      const data = args[0];
+      if (
+        !data ||
+        typeof data !== 'object' ||
+        !('from' in data) ||
+        !('candidate' in data) ||
+        typeof (data as { from: unknown }).from !== 'string' ||
+        typeof (data as { candidate: unknown }).candidate !== 'object' ||
+        !(data as { candidate: unknown }).candidate
+      ) {
+        console.error('[WebRTC] Invalid signal-ice-candidate data:', data);
+        return;
+      }
+
+      const validatedData = data as {
+        from: string;
+        candidate: RTCIceCandidateInit;
+      };
+
+      console.log('[WebRTC] Received ICE candidate from:', validatedData.from);
 
       if (peerConnectionRef.current) {
         try {
           await peerConnectionRef.current.addIceCandidate(
-            new RTCIceCandidate(data.candidate)
+            new RTCIceCandidate(validatedData.candidate)
           );
         } catch (error) {
           console.error('[WebRTC] Error adding ICE candidate:', error);

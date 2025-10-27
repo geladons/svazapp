@@ -27,10 +27,12 @@ interface WebTorrentWire {
 /**
  * WebTorrent Torrent with Wire Support
  * Extended type for WebTorrent torrent with wires array
+ * Uses Omit to avoid method signature conflicts with base Torrent type
  */
-interface WebTorrentTorrentWithWires extends WebTorrent.Torrent {
+interface WebTorrentTorrentWithWires extends Omit<WebTorrent.Torrent, 'on'> {
   wires: WebTorrentWire[];
   on(event: 'wire', callback: (wire: WebTorrentWire) => void): void;
+  on(event: string, callback: (...args: unknown[]) => void): void;
 }
 
 export type SignalingMessage =
@@ -115,6 +117,8 @@ export class WebTorrentSignalingManager {
       // We use a magnet link with the info hash
       const magnetURI = `magnet:?xt=urn:btih:${infoHash}`;
 
+      // Type assertion: WebTorrent.Torrent has wires property at runtime
+      // Using unknown intermediate type for safe type assertion
       this.torrent = this.client.add(magnetURI, {
         announce: [
           // Public WebTorrent trackers
@@ -122,7 +126,7 @@ export class WebTorrentSignalingManager {
           'wss://tracker.btorrent.xyz',
           'wss://tracker.webtorrent.dev',
         ],
-      });
+      }) as unknown as WebTorrentTorrentWithWires;
 
       this.torrent.on('wire', (wire: WebTorrentWire) => {
         console.log('[WebTorrentSignaling] New wire connection');
@@ -141,9 +145,11 @@ export class WebTorrentSignalingManager {
         });
       });
 
-      this.torrent.on('error', (err: string | Error) => {
+      this.torrent.on('error', (...args: unknown[]) => {
+        // Type guard: validate error parameter
+        const err = args[0];
         console.error('[WebTorrentSignaling] Torrent error:', err);
-        const error = typeof err === 'string' ? new Error(err) : err;
+        const error = typeof err === 'string' ? new Error(err) : err instanceof Error ? err : new Error(String(err));
         this.options.onError?.(error);
       });
 
@@ -186,10 +192,13 @@ export class WebTorrentSignalingManager {
 
       try {
         await new Promise<void>((resolve, reject) => {
-          this.torrent!.destroy((err?: Error) => {
+          // WebTorrent destroy() accepts options object or callback
+          // Using options object with callback
+          this.torrent!.destroy({}, (err: string | Error) => {
             if (err) {
-              console.error('[WebTorrentSignaling] Error destroying torrent:', err);
-              reject(err);
+              const error = typeof err === 'string' ? new Error(err) : err;
+              console.error('[WebTorrentSignaling] Error destroying torrent:', error);
+              reject(error);
             } else {
               console.log('[WebTorrentSignaling] Left swarm successfully');
               this.torrent = null;

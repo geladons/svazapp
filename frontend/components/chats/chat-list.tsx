@@ -137,22 +137,55 @@ export function ChatList() {
     /**
      * Handle incoming message
      */
-    const handleMessageReceived = (data: {
-      from: string;
-      chatId: string;
-      message: string;
-      timestamp: string;
-    }) => {
+    const handleMessageReceived = (...args: unknown[]) => {
+      // Type guard: validate incoming data structure
+      const data = args[0];
+      if (
+        !data ||
+        typeof data !== 'object' ||
+        !('from' in data) ||
+        !('chatId' in data) ||
+        !('message' in data) ||
+        !('timestamp' in data) ||
+        typeof (data as { from: unknown }).from !== 'string' ||
+        typeof (data as { chatId: unknown }).chatId !== 'string' ||
+        typeof (data as { message: unknown }).message !== 'string' ||
+        typeof (data as { timestamp: unknown }).timestamp !== 'string'
+      ) {
+        console.error('[ChatList] Invalid message-received data:', data);
+        return;
+      }
+
+      const validatedData = data as {
+        from: string;
+        chatId: string;
+        message: string;
+        timestamp: string;
+      };
+
       // Update last message and increment unread count
-      updateLastMessage(data.chatId, data.message, data.from);
-      incrementUnreadCount(data.chatId);
+      updateLastMessage(validatedData.chatId, validatedData.message, validatedData.from);
+      incrementUnreadCount(validatedData.chatId);
     };
 
     /**
      * Handle chat read event
      */
-    const handleChatRead = (data: { chatId: string }) => {
-      markAsRead(data.chatId);
+    const handleChatRead = (...args: unknown[]) => {
+      // Type guard: validate incoming data structure
+      const data = args[0];
+      if (
+        !data ||
+        typeof data !== 'object' ||
+        !('chatId' in data) ||
+        typeof (data as { chatId: unknown }).chatId !== 'string'
+      ) {
+        console.error('[ChatList] Invalid chat-read data:', data);
+        return;
+      }
+
+      const validatedData = data as { chatId: string };
+      markAsRead(validatedData.chatId);
     };
 
     // Subscribe to events

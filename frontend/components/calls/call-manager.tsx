@@ -207,8 +207,23 @@ export function CallManager() {
    * Handle incoming call events
    */
   useEffect(() => {
-    const handleCallIncoming = async (data: { from: string; callType: string }) => {
-      console.log('[CallManager] Incoming call from:', data.from);
+    const handleCallIncoming = async (...args: unknown[]) => {
+      // Type guard: validate incoming data structure
+      const data = args[0];
+      if (
+        !data ||
+        typeof data !== 'object' ||
+        !('from' in data) ||
+        !('callType' in data) ||
+        typeof (data as { from: unknown }).from !== 'string' ||
+        typeof (data as { callType: unknown }).callType !== 'string'
+      ) {
+        console.error('[CallManager] Invalid call-incoming data:', data);
+        return;
+      }
+
+      const validatedData = data as { from: string; callType: string };
+      console.log('[CallManager] Incoming call from:', validatedData.from);
 
       // Fetch user info from API or IndexedDB
       let remoteUser: {
@@ -217,7 +232,7 @@ export function CallManager() {
         username: string;
         avatarUrl: string | null;
       } = {
-        id: data.from,
+        id: validatedData.from,
         displayName: 'Unknown User',
         username: 'unknown',
         avatarUrl: null,
@@ -225,7 +240,7 @@ export function CallManager() {
 
       try {
         // Try to fetch from IndexedDB first (faster)
-        const dbUser = await db.users.get(data.from);
+        const dbUser = await db.users.get(validatedData.from);
         if (dbUser) {
           remoteUser = {
             id: dbUser.id,
@@ -241,7 +256,7 @@ export function CallManager() {
             onAuthError: () => {},
           });
           apiClient.setTokens(tokens.accessToken, tokens.refreshToken);
-          const apiUser = await apiClient.getUserById(data.from);
+          const apiUser = await apiClient.getUserById(validatedData.from);
           remoteUser = {
             id: apiUser.id,
             displayName: apiUser.displayName || apiUser.username,
@@ -257,29 +272,29 @@ export function CallManager() {
       // Set incoming call
       useCallStore.setState({
         activeCall: {
-          remoteUserId: data.from,
+          remoteUserId: validatedData.from,
           remoteUserName: remoteUser.displayName,
           remoteUserUsername: remoteUser.username,
           remoteUserAvatar: remoteUser.avatarUrl,
-          type: data.callType as 'AUDIO' | 'VIDEO',
+          type: validatedData.callType as 'AUDIO' | 'VIDEO',
           direction: 'INCOMING',
           status: 'ringing',
         },
       });
     };
 
-    const handleCallAccepted = () => {
+    const handleCallAccepted = (..._args: unknown[]) => {
       console.log('[CallManager] Call accepted');
       updateCallStatus('active');
     };
 
-    const handleCallRejected = () => {
+    const handleCallRejected = (..._args: unknown[]) => {
       console.log('[CallManager] Call rejected');
       clearCall();
       endCall();
     };
 
-    const handleCallEnded = () => {
+    const handleCallEnded = (..._args: unknown[]) => {
       console.log('[CallManager] Call ended by remote user');
       clearCall();
       endCall();
@@ -297,7 +312,7 @@ export function CallManager() {
       off('call-rejected', handleCallRejected);
       off('call-ended', handleCallEnded);
     };
-  }, [on, off, updateCallStatus, clearCall, endCall]);
+  }, [on, off, updateCallStatus, clearCall, endCall, tokens]);
 
   /**
    * Update call status based on WebRTC connection state

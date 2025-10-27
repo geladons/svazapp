@@ -144,24 +144,44 @@ export function ChatWindow({ chat }: ChatWindowProps) {
     /**
      * Handle incoming message
      */
-    const handleMessageReceived = async (data: {
-      from: string;
-      chatId: string;
-      message: string;
-      timestamp: string;
-    }) => {
+    const handleMessageReceived = async (...args: unknown[]) => {
+      // Type guard: validate incoming data structure
+      const data = args[0];
+      if (
+        !data ||
+        typeof data !== 'object' ||
+        !('from' in data) ||
+        !('chatId' in data) ||
+        !('message' in data) ||
+        !('timestamp' in data) ||
+        typeof (data as { from: unknown }).from !== 'string' ||
+        typeof (data as { chatId: unknown }).chatId !== 'string' ||
+        typeof (data as { message: unknown }).message !== 'string' ||
+        typeof (data as { timestamp: unknown }).timestamp !== 'string'
+      ) {
+        console.error('[ChatWindow] Invalid message-received data:', data);
+        return;
+      }
+
+      const validatedData = data as {
+        from: string;
+        chatId: string;
+        message: string;
+        timestamp: string;
+      };
+
       // Only handle messages for this chat
-      if (data.chatId !== chat.id) return;
+      if (validatedData.chatId !== chat.id) return;
 
       const newMessage = {
-        id: `${data.from}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-        senderId: data.from,
+        id: `${validatedData.from}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        senderId: validatedData.from,
         receiverId: user.id,
-        content: data.message,
+        content: validatedData.message,
         type: 'TEXT' as const,
         status: 'DELIVERED' as const,
-        createdAt: new Date(data.timestamp),
-        updatedAt: new Date(data.timestamp),
+        createdAt: new Date(validatedData.timestamp),
+        updatedAt: new Date(validatedData.timestamp),
         localOnly: false,
       };
 
@@ -169,14 +189,29 @@ export function ChatWindow({ chat }: ChatWindowProps) {
       await addMessage(newMessage);
 
       // Mark as read immediately (since user is viewing the chat)
-      emit('chat-read', { chatId: chat.id, to: data.from });
+      emit('chat-read', { chatId: chat.id, to: validatedData.from });
     };
 
     /**
      * Handle typing start
      */
-    const handleTypingStart = (data: { from: string; chatId: string }) => {
-      if (data.chatId === chat.id) {
+    const handleTypingStart = (...args: unknown[]) => {
+      // Type guard: validate incoming data structure
+      const data = args[0];
+      if (
+        !data ||
+        typeof data !== 'object' ||
+        !('from' in data) ||
+        !('chatId' in data) ||
+        typeof (data as { from: unknown }).from !== 'string' ||
+        typeof (data as { chatId: unknown }).chatId !== 'string'
+      ) {
+        console.error('[ChatWindow] Invalid typing-start data:', data);
+        return;
+      }
+
+      const validatedData = data as { from: string; chatId: string };
+      if (validatedData.chatId === chat.id) {
         setIsTyping(true);
       }
     };
@@ -184,8 +219,23 @@ export function ChatWindow({ chat }: ChatWindowProps) {
     /**
      * Handle typing stop
      */
-    const handleTypingStop = (data: { from: string; chatId: string }) => {
-      if (data.chatId === chat.id) {
+    const handleTypingStop = (...args: unknown[]) => {
+      // Type guard: validate incoming data structure
+      const data = args[0];
+      if (
+        !data ||
+        typeof data !== 'object' ||
+        !('from' in data) ||
+        !('chatId' in data) ||
+        typeof (data as { from: unknown }).from !== 'string' ||
+        typeof (data as { chatId: unknown }).chatId !== 'string'
+      ) {
+        console.error('[ChatWindow] Invalid typing-stop data:', data);
+        return;
+      }
+
+      const validatedData = data as { from: string; chatId: string };
+      if (validatedData.chatId === chat.id) {
         setIsTyping(false);
       }
     };
