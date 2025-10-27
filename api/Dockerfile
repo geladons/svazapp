@@ -21,11 +21,14 @@ WORKDIR /app
 # Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
 
-# Copy source code
-COPY . .
+# Copy Prisma schema first (for better layer caching)
+COPY prisma ./prisma
 
 # Generate Prisma Client
 RUN npx prisma generate
+
+# Copy source code
+COPY . .
 
 # Build TypeScript
 RUN npm run build
@@ -40,8 +43,8 @@ WORKDIR /app
 # Set production environment
 ENV NODE_ENV=production
 
-# Install OpenSSL for Prisma
-RUN apk add --no-cache openssl
+# Install OpenSSL for Prisma and netcat for database health check
+RUN apk add --no-cache openssl netcat-openbsd
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
