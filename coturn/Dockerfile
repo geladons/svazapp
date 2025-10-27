@@ -5,7 +5,7 @@ FROM coturn/coturn:latest
 
 # Install curl for IP detection
 USER root
-RUN apk add --no-cache curl
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /docker-entrypoint.sh
