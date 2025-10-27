@@ -120,6 +120,7 @@ caddy-config/
 coturn-certs/*.pem
 coturn-certs/*.key
 coturn-certs/*.crt
+coturn-certs/dns-credentials/
 !coturn-certs/.gitkeep
 !coturn-certs/README.md
 

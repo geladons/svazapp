@@ -52,6 +52,7 @@ source "$SCRIPT_DIR/lib/validators.sh"
 source "$SCRIPT_DIR/lib/system.sh"
 source "$SCRIPT_DIR/lib/docker.sh"
 source "$SCRIPT_DIR/lib/config.sh"
+source "$SCRIPT_DIR/lib/ssl.sh"
 source "$SCRIPT_DIR/lib/deploy.sh"
 
 # =============================================================================
@@ -181,7 +182,12 @@ main() {
     
     print_header "Generating Configuration"
     generate_env_file
-    
+
+    # Setup CoTURN SSL (only for external-proxy scenario)
+    if [ "$DEPLOYMENT_SCENARIO" = "external-proxy" ]; then
+        setup_coturn_ssl
+    fi
+
     print_header "Configuring Firewall"
     configure_firewall
     

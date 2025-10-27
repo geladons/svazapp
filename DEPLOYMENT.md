@@ -427,7 +427,38 @@ Log into your router's admin panel (usually `192.168.1.1` or `192.168.0.1`).
 
 **How to obtain certificates:**
 
-#### Option 1: Using Certbot (Recommended)
+#### Option 1: Automatic via DNS API (Recommended)
+
+**Best for:** Fully automated certificate management with auto-renewal.
+
+The installer can automatically obtain and renew SSL certificates using DNS-01 ACME challenge via your DNS provider's API.
+
+**Supported DNS Providers:**
+- Cloudflare (most popular)
+- DigitalOcean
+- AWS Route53
+- Yandex Cloud DNS (Russia)
+
+**During installation:**
+When you run the installer and select "Scenario B: External Reverse Proxy", you will be asked:
+```
+How do you want to obtain SSL certificates for CoTURN TURNS?
+1) Manual setup (I will provide certificates myself)
+2) Automatic via DNS API (Cloudflare, DigitalOcean, etc.)
+```
+
+Select option 2 and follow the prompts. The installer will:
+- Install certbot and appropriate DNS plugin
+- Obtain SSL certificate via DNS-01 challenge
+- Copy certificates to `./coturn-certs/`
+- Setup automatic renewal (runs monthly)
+
+**Manual setup after installation:**
+See `./coturn-certs/README.md` for detailed instructions on setting up DNS API manually.
+
+---
+
+#### Option 2: Using Certbot (Standalone Mode)
 
 If you have certbot installed on your VPS:
 
@@ -453,7 +484,7 @@ sudo chmod 600 ./coturn-certs/privkey.pem
 docker compose -f docker-compose.external-proxy.yml restart coturn
 ```
 
-#### Option 2: Copy from NPM
+#### Option 3: Copy from NPM
 
 If NPM is on the same server, you can copy its certificates:
 
@@ -473,7 +504,7 @@ sudo chmod 600 ./coturn-certs/privkey.pem
 docker compose -f docker-compose.external-proxy.yml restart coturn
 ```
 
-#### Option 3: Manual Upload
+#### Option 4: Manual Upload
 
 If you obtained certificates elsewhere (ZeroSSL, your DNS provider, etc.):
 

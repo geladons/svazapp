@@ -104,21 +104,37 @@ print_post_install() {
     else
         echo -e "${BOLD}Next Steps:${NC}"
         echo ""
-        echo -e "1. ${CYAN}Configure your reverse proxy (NPM/Traefik):${NC}"
+
+        # Check if SSL was configured via DNS API
+        if [ "$COTURN_SSL_METHOD" = "dns-api" ]; then
+            echo -e "1. ${CYAN}CoTURN SSL Status:${NC}"
+            echo "   ${GREEN}✓${NC} SSL certificates obtained automatically via DNS API"
+            echo "   ${GREEN}✓${NC} Automatic renewal configured (runs monthly)"
+            echo ""
+            echo -e "2. ${CYAN}Configure your reverse proxy (NPM/Traefik):${NC}"
+        else
+            echo -e "1. ${CYAN}Configure SSL for CoTURN TURNS (CRITICAL):${NC}"
+            echo "   ${YELLOW}⚠${NC}  You selected manual SSL setup"
+            echo "   ${YELLOW}⚠${NC}  See: $INSTALL_DIR/coturn-certs/README.md"
+            echo "   ${YELLOW}⚠${NC}  Video calls will NOT work in DPI networks without SSL!"
+            echo ""
+            echo -e "2. ${CYAN}Configure your reverse proxy (NPM/Traefik):${NC}"
+        fi
+
         echo "   - Create ONE proxy host for: $USER_DOMAIN"
         echo "   - Forward / to: your-vps-ip:3000 (Frontend)"
         echo "   - Add custom location /api to: your-vps-ip:8080"
         echo "   - Add custom location /livekit to: your-vps-ip:7880"
         echo "   - Enable WebSocket support on all locations"
         echo ""
-        echo -e "2. ${CYAN}Configure router port forwarding:${NC}"
+        echo -e "3. ${CYAN}Configure router port forwarding:${NC}"
         echo "   - Forward ports 3478, 5349, 49152-65535 to your VPS"
         echo "   - These ports are for CoTURN (cannot be proxied)"
         echo ""
-        echo -e "3. ${CYAN}Access your application:${NC}"
+        echo -e "4. ${CYAN}Access your application:${NC}"
         echo "   https://$USER_DOMAIN"
         echo ""
-        echo -e "4. ${CYAN}Check service status:${NC}"
+        echo -e "5. ${CYAN}Check service status:${NC}"
         echo "   cd $INSTALL_DIR"
         echo "   docker compose -f docker-compose.external-proxy.yml ps"
         echo ""
