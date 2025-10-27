@@ -115,6 +115,15 @@ caddy-data/
 caddy-config/
 
 # =============================================================================
+# SSL CERTIFICATES (CoTURN - Scenario B)
+# =============================================================================
+coturn-certs/*.pem
+coturn-certs/*.key
+coturn-certs/*.crt
+!coturn-certs/.gitkeep
+!coturn-certs/README.md
+
+# =============================================================================
 # SERVICE CONFIGURATIONS (Generated from templates)
 # =============================================================================
 livekit/livekit.yaml

@@ -2,7 +2,8 @@
 # =============================================================================
 # Docker Entrypoint Script for CoTURN Service
 # =============================================================================
-# This script detects external IP and configures CoTURN before starting
+# This script detects external IP, configures SSL certificates,
+# and generates CoTURN configuration before starting the server.
 # =============================================================================
 
 set -e
@@ -10,6 +11,11 @@ set -e
 echo "========================================="
 echo "COTURN - Starting..."
 echo "========================================="
+
+# Determine deployment scenario
+SCENARIO="${DEPLOYMENT_SCENARIO:-standalone}"
+echo "ℹ️  Deployment scenario: $SCENARIO"
+echo ""
 
 # Detect external IP
 if [ "$DETECT_EXTERNAL_IP" = "yes" ]; then
@@ -46,7 +52,79 @@ else
   echo "ℹ️  Relay IP set to container IP: $RELAY_IP"
 fi
 
-# Generate turnserver.conf with detected IPs
+# =============================================================================
+# SSL/TLS Certificate Configuration
+# =============================================================================
+
+CERT_FILE=""
+KEY_FILE=""
+TLS_ENABLED=false
+
+if [ "$SCENARIO" = "standalone" ]; then
+  echo "🔐 Configuring SSL certificates (Scenario A: Standalone with Caddy)..."
+
+  # Wait for Caddy to obtain SSL certificates
+  CERT_PATH="/caddy-data/certificates/acme-v02.api.letsencrypt.org-directory/${DOMAIN}/${DOMAIN}.crt"
+  KEY_PATH="/caddy-data/certificates/acme-v02.api.letsencrypt.org-directory/${DOMAIN}/${DOMAIN}.key"
+
+  echo "⏳ Waiting for Caddy SSL certificates..."
+  echo "   Certificate: $CERT_PATH"
+  echo "   Key: $KEY_PATH"
+
+  # Wait up to 5 minutes (60 iterations * 5 seconds)
+  for i in $(seq 1 60); do
+    if [ -f "$CERT_PATH" ] && [ -f "$KEY_PATH" ]; then
+      echo "✅ Caddy SSL certificates found!"
+      CERT_FILE="$CERT_PATH"
+      KEY_FILE="$KEY_PATH"
+      TLS_ENABLED=true
+      break
+    fi
+
+    if [ $((i % 6)) -eq 0 ]; then
+      echo "⏳ Still waiting for certificates... ($((i * 5)) seconds elapsed)"
+    fi
+
+    sleep 5
+  done
+
+  if [ "$TLS_ENABLED" = false ]; then
+    echo "⚠️  WARNING: SSL certificates not found after 5 minutes"
+    echo "⚠️  TURNS (port 5349) will NOT work without certificates"
+    echo "⚠️  CoTURN will start with STUN/TURN only (port 3478)"
+  fi
+
+elif [ "$SCENARIO" = "external-proxy" ]; then
+  echo "🔐 Configuring SSL certificates (Scenario B: External Reverse Proxy)..."
+
+  # Check for user-provided certificates
+  USER_CERT="/etc/coturn/certs/fullchain.pem"
+  USER_KEY="/etc/coturn/certs/privkey.pem"
+
+  if [ -f "$USER_CERT" ] && [ -f "$USER_KEY" ]; then
+    echo "✅ User-provided SSL certificates found!"
+    CERT_FILE="$USER_CERT"
+    KEY_FILE="$USER_KEY"
+    TLS_ENABLED=true
+  else
+    echo "⚠️  WARNING: No SSL certificates found in /etc/coturn/certs/"
+    echo "⚠️  Expected files:"
+    echo "     - fullchain.pem (certificate chain)"
+    echo "     - privkey.pem (private key)"
+    echo ""
+    echo "⚠️  TURNS (port 5349) will NOT work without certificates"
+    echo "⚠️  CoTURN will start with STUN/TURN only (port 3478)"
+    echo ""
+    echo "📖 See DEPLOYMENT.md for instructions on obtaining SSL certificates"
+  fi
+fi
+
+echo ""
+
+# =============================================================================
+# Generate CoTURN Configuration
+# =============================================================================
+
 echo "📝 Generating turnserver.conf with detected IPs..."
 
 cat > /etc/coturn/turnserver.conf << EOF
@@ -128,6 +206,17 @@ syslog
 no-software-attribute
 EOF
 
+# Add SSL/TLS configuration if certificates are available
+if [ "$TLS_ENABLED" = true ]; then
+  echo "" >> /etc/coturn/turnserver.conf
+  echo "# ==============================================================================" >> /etc/coturn/turnserver.conf
+  echo "# SSL/TLS Configuration" >> /etc/coturn/turnserver.conf
+  echo "# ==============================================================================" >> /etc/coturn/turnserver.conf
+  echo "cert=$CERT_FILE" >> /etc/coturn/turnserver.conf
+  echo "pkey=$KEY_FILE" >> /etc/coturn/turnserver.conf
+  echo "" >> /etc/coturn/turnserver.conf
+fi
+
 echo "✅ Configuration generated successfully!"
 echo ""
 echo "========================================="
@@ -136,8 +225,14 @@ echo "  External IP: $EXTERNAL_IP"
 echo "  Relay IP: $RELAY_IP"
 echo "  Realm: ${REALM:-svaz.app}"
 echo "  User: ${USERNAME:-svazuser}"
-echo "  Listening Port: 3478"
-echo "  TLS Listening Port: 5349"
+echo "  Listening Port: 3478 (STUN/TURN)"
+echo "  TLS Listening Port: 5349 (TURNS)"
+if [ "$TLS_ENABLED" = true ]; then
+  echo "  TLS Status: ✅ ENABLED"
+  echo "  Certificate: $CERT_FILE"
+else
+  echo "  TLS Status: ❌ DISABLED (no certificates)"
+fi
 echo "  Relay Port Range: ${MIN_PORT:-49152}-${MAX_PORT:-65535}"
 echo "========================================="
 echo ""

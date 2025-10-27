@@ -126,6 +126,7 @@ services:
       - '${COTURN_TLS_LISTENING_PORT}:${COTURN_TLS_LISTENING_PORT}/udp'
       - '${COTURN_MIN_PORT}-${COTURN_MAX_PORT}:${COTURN_MIN_PORT}-${COTURN_MAX_PORT}/udp'
     environment:
+      DEPLOYMENT_SCENARIO: external-proxy
       DETECT_EXTERNAL_IP: 'yes'
       DETECT_RELAY_IP: 'yes'
       REALM: ${COTURN_REALM}
@@ -133,6 +134,8 @@ services:
       PASSWORD: ${COTURN_PASSWORD}
       MIN_PORT: ${COTURN_MIN_PORT}
       MAX_PORT: ${COTURN_MAX_PORT}
+    volumes:
+      - ./coturn-certs:/etc/coturn/certs:ro
     networks:
       - svazapp-network
 

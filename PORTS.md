@@ -43,8 +43,8 @@ svaz.app supports two deployment scenarios with different port configurations:
 | **80** | TCP | Caddy | HTTP (redirects to HTTPS) | ✅ Yes |
 | **443** | TCP | Caddy | HTTPS (main application) | ✅ Yes |
 | **443** | UDP | Caddy | HTTP/3 (QUIC) | ⚠️ Optional |
-| **3478** | UDP/TCP | CoTURN | STUN server | ✅ Yes |
-| **5349** | UDP/TCP | CoTURN | TURNS (STUN over TLS) | ⚠️ Optional |
+| **3478** | UDP/TCP | CoTURN | STUN/TURN server | ✅ Yes |
+| **5349** | UDP/TCP | CoTURN | TURNS (TURN over TLS) | ✅ Yes |
 | **49152-65535** | UDP | CoTURN | TURN relay port range | ✅ Yes |
 
 ### Internal Ports (Docker Network Only)
@@ -89,8 +89,8 @@ sudo ufw enable
 |------|----------|---------|---------|----------|
 | **80** | TCP | NPM/Traefik | HTTP (redirects to HTTPS) | ✅ Yes |
 | **443** | TCP | NPM/Traefik | HTTPS (main application) | ✅ Yes |
-| **3478** | UDP/TCP | CoTURN | STUN server | ✅ Yes |
-| **5349** | UDP/TCP | CoTURN | TURNS (STUN over TLS) | ⚠️ Optional |
+| **3478** | UDP/TCP | CoTURN | STUN/TURN server | ✅ Yes |
+| **5349** | UDP/TCP | CoTURN | TURNS (TURN over TLS) | ✅ Yes |
 | **49152-65535** | UDP | CoTURN | TURN relay port range | ✅ Yes |
 
 ### Exposed Ports (VPS to Reverse Proxy)
@@ -194,13 +194,22 @@ You **MUST** open these ports in your firewall for svaz.app to work:
 
 ---
 
-## Optional Ports
+## Critical Ports for Restrictive Networks
 
-### Port 5349 (TURNS - STUN over TLS)
-- **Purpose**: Encrypted STUN/TURN (rarely needed)
+### Port 5349 (TURNS - TURN over TLS)
+- **Purpose**: Encrypted TURN server for NAT traversal
 - **Protocol**: UDP/TCP
-- **Required?**: ❌ No (most clients use port 3478)
-- **When needed?**: Corporate networks that block non-TLS traffic
+- **Required?**: ✅ **YES** for networks with DPI (Deep Packet Inspection)
+- **When needed?**:
+  - Russia (government firewall with DPI since September 2025)
+  - China, Iran, Turkmenistan (strict internet censorship)
+  - Corporate networks that block non-TLS traffic on unusual ports
+  - Any network with deep packet inspection
+- **How it works**:
+  - Scenario A (Caddy): Automatically uses Caddy's SSL certificates
+  - Scenario B (External Proxy): Requires manual SSL certificate setup (see [DEPLOYMENT.md](./DEPLOYMENT.md))
+
+## Optional Ports
 
 ### Port 443/UDP (HTTP/3)
 - **Purpose**: QUIC protocol for faster HTTPS

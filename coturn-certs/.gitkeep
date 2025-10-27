@@ -1,0 +1,3 @@
+# This file ensures the coturn-certs directory is tracked by Git
+# Actual certificate files (*.pem) are ignored via .gitignore
+

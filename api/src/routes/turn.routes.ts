@@ -146,6 +146,7 @@ export default async function turnRoutes(fastify: FastifyInstance) {
         // Get TURN configuration from environment
         const stunUrl = process.env.NEXT_PUBLIC_STUN_URL;
         const turnUrl = process.env.NEXT_PUBLIC_TURN_URL;
+        const turnsUrl = process.env.NEXT_PUBLIC_TURNS_URL;
         const turnUser = process.env.COTURN_USER || 'svazuser';
         const turnPassword = process.env.COTURN_PASSWORD;
 
@@ -160,13 +161,18 @@ export default async function turnRoutes(fastify: FastifyInstance) {
           iceServers.push({ urls: stunUrl });
         }
 
-        // Add TURN server with temporary credentials
-        if (turnUrl && turnPassword) {
-          const turnService = new TurnService(turnUrl, turnUser, turnPassword);
+        // Add TURN/TURNS servers with temporary credentials
+        if ((turnUrl || turnsUrl) && turnPassword) {
+          // Collect all available TURN URLs (both TCP and TLS)
+          const turnUrls: string[] = [];
+          if (turnUrl) turnUrls.push(turnUrl);
+          if (turnsUrl) turnUrls.push(turnsUrl);
+
+          const turnService = new TurnService(turnUrls[0], turnUser, turnPassword);
           const turnCredentials = turnService.generateCredentials();
 
           iceServers.push({
-            urls: turnCredentials.urls,
+            urls: turnUrls, // WebRTC will try both TURN and TURNS
             username: turnCredentials.username,
             credential: turnCredentials.credential,
           });

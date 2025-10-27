@@ -317,15 +317,24 @@ COTURN_PASSWORD=5mK8pL1vN4qR7wT0yU3iO6aS9dF2gH5jK8lM1nB4vC7xZ
 - If port 3478 is blocked by firewall
 - If port is already in use
 
-**Important**: If changed, also update `NEXT_PUBLIC_STUN_URL` and `NEXT_PUBLIC_TURN_URL`
+**Important**: If changed, also update `NEXT_PUBLIC_STUN_URL`, `NEXT_PUBLIC_TURN_URL`, and `NEXT_PUBLIC_TURNS_URL`
 
 ### `COTURN_TLS_LISTENING_PORT`
 
-- **Required**: ❌ No
+- **Required**: ✅ Yes
 - **Default**: `5349`
 - **Must Change**: ❌ No
-- **Description**: TURNS (STUN/TURN over TLS) port
+- **Description**: TURNS (TURN over TLS) port - **CRITICAL for DPI networks**
 - **Standard**: `5349` (IETF standard)
+
+**Important**: This port is **REQUIRED** for networks with Deep Packet Inspection (DPI):
+- Russia (government firewall since September 2025)
+- China, Iran, Turkmenistan
+- Corporate networks with strict firewalls
+
+**SSL Certificate Setup**:
+- **Scenario A (Caddy)**: Automatic - uses Caddy's Let's Encrypt certificates
+- **Scenario B (External Proxy)**: Manual - see [coturn-certs/README.md](./coturn-certs/README.md)
 
 ### `COTURN_MIN_PORT` / `COTURN_MAX_PORT`
 
@@ -393,8 +402,24 @@ COTURN_MAX_PORT=51000  # 1000 ports (enough for ~500 concurrent calls)
 - **Required**: ✅ Yes
 - **Default**: `turn:${DOMAIN}:3478`
 - **Must Change**: ⚠️ Only if COTURN port changed
-- **Description**: TURN server URL for WebRTC
+- **Description**: TURN server URL for WebRTC (non-TLS)
 - **Format**: `turn:your-domain.com:3478`
+
+### `NEXT_PUBLIC_TURNS_URL`
+
+- **Required**: ✅ Yes
+- **Default**: `turns:${DOMAIN}:5349`
+- **Must Change**: ⚠️ Only if COTURN TLS port changed
+- **Description**: TURNS server URL for WebRTC (TLS-encrypted)
+- **Format**: `turns:your-domain.com:5349`
+- **Used By**: Frontend (WebRTC ICE configuration)
+
+**Important Notes**:
+- TURNS (port 5349) is **CRITICAL** for networks with DPI (Deep Packet Inspection)
+- Required in Russia, China, Iran, and corporate networks with strict firewalls
+- WebRTC will automatically choose between TURN (3478) and TURNS (5349) based on network conditions
+- Scenario A (Caddy): SSL certificates are configured automatically
+- Scenario B (External Proxy): You must provide SSL certificates manually (see [DEPLOYMENT.md](./DEPLOYMENT.md))
 
 ### `NEXT_PUBLIC_WEBTORRENT_TRACKERS`
 
@@ -551,6 +576,7 @@ NEXT_PUBLIC_SOCKET_URL=https://${DOMAIN}
 NEXT_PUBLIC_LIVEKIT_URL=wss://${DOMAIN}/livekit
 NEXT_PUBLIC_STUN_URL=stun:${DOMAIN}:3478
 NEXT_PUBLIC_TURN_URL=turn:${DOMAIN}:3478
+NEXT_PUBLIC_TURNS_URL=turns:${DOMAIN}:5349
 NEXT_PUBLIC_WEBTORRENT_TRACKERS=wss://tracker.openwebtorrent.com,wss://tracker.btorrent.xyz
 
 # Caddy

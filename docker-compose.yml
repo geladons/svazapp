@@ -131,6 +131,9 @@ services:
       dockerfile: Dockerfile
     container_name: svazapp-coturn
     restart: unless-stopped
+    depends_on:
+      caddy:
+        condition: service_started
     ports:
       - '${COTURN_LISTENING_PORT}:${COTURN_LISTENING_PORT}/tcp'
       - '${COTURN_LISTENING_PORT}:${COTURN_LISTENING_PORT}/udp'
@@ -138,6 +141,8 @@ services:
       - '${COTURN_TLS_LISTENING_PORT}:${COTURN_TLS_LISTENING_PORT}/udp'
       - '${COTURN_MIN_PORT}-${COTURN_MAX_PORT}:${COTURN_MIN_PORT}-${COTURN_MAX_PORT}/udp'
     environment:
+      DEPLOYMENT_SCENARIO: standalone
+      DOMAIN: ${DOMAIN}
       DETECT_EXTERNAL_IP: 'yes'
       DETECT_RELAY_IP: 'yes'
       REALM: ${COTURN_REALM}
@@ -145,6 +150,8 @@ services:
       PASSWORD: ${COTURN_PASSWORD}
       MIN_PORT: ${COTURN_MIN_PORT}
       MAX_PORT: ${COTURN_MAX_PORT}
+    volumes:
+      - caddy-data:/caddy-data:ro
     networks:
       - svazapp-network
 

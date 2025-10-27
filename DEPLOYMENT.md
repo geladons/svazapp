@@ -416,11 +416,110 @@ Log into your router's admin panel (usually `192.168.1.1` or `192.168.0.1`).
 
 ---
 
-### Step 6: Configure Nginx Proxy Manager (NPM)
+### Step 6: Configure SSL Certificates for CoTURN (TURNS)
+
+**⚠️ CRITICAL:** CoTURN requires SSL certificates for TURNS (port 5349) to work in networks with DPI (Deep Packet Inspection).
+
+**Why is this needed?**
+- Russia, China, Iran, and other countries use DPI to block unencrypted TURN traffic
+- Corporate networks often block non-TLS protocols on unusual ports
+- Without TURNS, video calls will fail in these networks
+
+**How to obtain certificates:**
+
+#### Option 1: Using Certbot (Recommended)
+
+If you have certbot installed on your VPS:
+
+```bash
+# Install certbot (if not already installed)
+sudo apt update
+sudo apt install certbot
+
+# Obtain certificate for your domain
+# Note: Port 80 must be accessible (temporarily stop NPM if needed)
+sudo certbot certonly --standalone -d svaz.app
+
+# Copy certificates to coturn-certs directory
+cd /path/to/svazapp
+sudo cp /etc/letsencrypt/live/svaz.app/fullchain.pem ./coturn-certs/
+sudo cp /etc/letsencrypt/live/svaz.app/privkey.pem ./coturn-certs/
+
+# Set correct permissions
+sudo chmod 644 ./coturn-certs/fullchain.pem
+sudo chmod 600 ./coturn-certs/privkey.pem
+
+# Restart CoTURN to load certificates
+docker compose -f docker-compose.external-proxy.yml restart coturn
+```
+
+#### Option 2: Copy from NPM
+
+If NPM is on the same server, you can copy its certificates:
+
+```bash
+# Find NPM certificate location
+docker volume inspect npm_letsencrypt
+
+# Copy certificates (adjust path based on volume location)
+sudo cp /var/lib/docker/volumes/npm_letsencrypt/_data/live/svaz.app/fullchain.pem ./coturn-certs/
+sudo cp /var/lib/docker/volumes/npm_letsencrypt/_data/live/svaz.app/privkey.pem ./coturn-certs/
+
+# Set permissions
+sudo chmod 644 ./coturn-certs/fullchain.pem
+sudo chmod 600 ./coturn-certs/privkey.pem
+
+# Restart CoTURN
+docker compose -f docker-compose.external-proxy.yml restart coturn
+```
+
+#### Option 3: Manual Upload
+
+If you obtained certificates elsewhere (ZeroSSL, your DNS provider, etc.):
+
+1. Download `fullchain.pem` and `privkey.pem`
+2. Upload them to `./coturn-certs/` directory on your VPS
+3. Set correct permissions (see above)
+4. Restart CoTURN
+
+**Verify TURNS is working:**
+
+```bash
+# Check CoTURN logs
+docker compose -f docker-compose.external-proxy.yml logs coturn
+
+# You should see:
+# ✅ User-provided SSL certificates found!
+# TLS Status: ✅ ENABLED
+```
+
+**Certificate Renewal:**
+
+SSL certificates expire every 90 days. Set up automatic renewal:
+
+```bash
+# Create renewal script
+cat > ~/renew-coturn-certs.sh << 'EOF'
+#!/bin/bash
+sudo certbot renew
+sudo cp /etc/letsencrypt/live/svaz.app/fullchain.pem /path/to/svazapp/coturn-certs/
+sudo cp /etc/letsencrypt/live/svaz.app/privkey.pem /path/to/svazapp/coturn-certs/
+docker compose -f /path/to/svazapp/docker-compose.external-proxy.yml restart coturn
+EOF
+
+chmod +x ~/renew-coturn-certs.sh
+
+# Add to crontab (runs monthly)
+(crontab -l 2>/dev/null; echo "0 0 1 * * ~/renew-coturn-certs.sh") | crontab -
+```
+
+---
+
+### Step 7: Configure Nginx Proxy Manager (NPM)
 
 **Important:** You will create **ONE** proxy host for your domain with **Custom Locations** for API and LiveKit.
 
-#### 6.1 Create Main Proxy Host
+#### 7.1 Create Main Proxy Host
 
 1. Open NPM web interface (usually `http://npm-ip:81`)
 2. Go to **Hosts** → **Proxy Hosts**
@@ -447,7 +546,7 @@ Click **Save**.
 
 ---
 
-#### 6.2 Add Custom Location for API
+#### 7.2 Add Custom Location for API
 
 1. Edit the proxy host you just created
 2. Go to **Custom Locations** tab
@@ -483,7 +582,7 @@ Click **Save**.
 
 ---
 
-#### 6.3 Add Custom Location for LiveKit
+#### 7.3 Add Custom Location for LiveKit
 
 1. Still in **Custom Locations** tab
 2. Click **Add Location**
@@ -518,7 +617,7 @@ Click **Save**.
 
 ---
 
-#### 6.4 Add Custom Location for Socket.io
+#### 7.4 Add Custom Location for Socket.io
 
 1. Still in **Custom Locations** tab
 2. Click **Add Location**
@@ -554,7 +653,7 @@ Click **Save**.
 
 ---
 
-### Step 7: Verify NPM Configuration
+### Step 8: Verify NPM Configuration
 
 Your NPM proxy host should now have:
 

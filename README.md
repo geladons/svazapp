@@ -106,6 +106,8 @@ Then configure your reverse proxy (NPM/Traefik) to proxy:
 
 **Important:** CoTURN ports (3478, 5349, 49152-65535) must be forwarded directly from router to VPS.
 
+**⚠️ CRITICAL:** Port 5349 (TURNS) requires SSL certificates. See [DEPLOYMENT.md - Step 6](./DEPLOYMENT.md#step-6-configure-ssl-certificates-for-coturn-turns) for setup instructions.
+
 ---
 
 **📖 Detailed Instructions:** See [DEPLOYMENT.md](./DEPLOYMENT.md) for step-by-step guides for both scenarios.
@@ -165,7 +167,15 @@ svaz.app requires the following ports to be open in your firewall:
 | **80** | TCP | HTTP (SSL validation) | ✅ Yes |
 | **443** | TCP | HTTPS (main app) | ✅ Yes |
 | **3478** | UDP/TCP | STUN/TURN (WebRTC) | ✅ Yes |
+| **5349** | UDP/TCP | TURNS (TLS-encrypted TURN) | ✅ Yes* |
 | **49152-65535** | UDP | TURN relay (WebRTC) | ✅ Yes |
+
+**\*Port 5349 (TURNS) is CRITICAL for:**
+- 🇷🇺 Russia (DPI firewall since September 2025)
+- 🇨🇳 China, 🇮🇷 Iran, 🇹🇲 Turkmenistan (strict internet censorship)
+- 🏢 Corporate networks with Deep Packet Inspection (DPI)
+
+Without TURNS, video calls will fail in these networks.
 
 **All ports are configurable** - see [PORTS.md](./PORTS.md) for details.
 
