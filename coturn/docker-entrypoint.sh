@@ -21,11 +21,21 @@ echo ""
 if [ "$DETECT_EXTERNAL_IP" = "yes" ]; then
   echo "🔍 Detecting external IP address..."
 
-  # Try multiple services to detect external IP (with timeout)
-  EXTERNAL_IP=$(timeout 5 curl -s -4 https://api.ipify.org 2>/dev/null || \
-                timeout 5 curl -s -4 https://ifconfig.me 2>/dev/null || \
-                timeout 5 curl -s -4 https://icanhazip.com 2>/dev/null || \
-                echo "")
+  # Check if timeout command exists
+  if command -v timeout >/dev/null 2>&1; then
+    # Try multiple services to detect external IP (with timeout)
+    EXTERNAL_IP=$(timeout 5 curl -s -4 https://api.ipify.org 2>/dev/null || \
+                  timeout 5 curl -s -4 https://ifconfig.me 2>/dev/null || \
+                  timeout 5 curl -s -4 https://icanhazip.com 2>/dev/null || \
+                  echo "")
+  else
+    # Fallback without timeout command
+    echo "⚠️  timeout command not available, using curl without timeout"
+    EXTERNAL_IP=$(curl -s -4 --max-time 5 https://api.ipify.org 2>/dev/null || \
+                  curl -s -4 --max-time 5 https://ifconfig.me 2>/dev/null || \
+                  curl -s -4 --max-time 5 https://icanhazip.com 2>/dev/null || \
+                  echo "")
+  fi
 
   if [ -n "$EXTERNAL_IP" ]; then
     echo "✅ Detected external IP: $EXTERNAL_IP"

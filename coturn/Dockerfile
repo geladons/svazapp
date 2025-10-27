@@ -3,16 +3,19 @@
 # =============================================================================
 FROM coturn/coturn:latest
 
-# Install curl for IP detection
+# Install curl and coreutils (for timeout command) for IP detection
 USER root
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y curl coreutils && rm -rf /var/lib/apt/lists/*
+
+# Create directory for config and set permissions
+RUN mkdir -p /etc/coturn && chmod 755 /etc/coturn
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
-# Switch back to coturn user
-USER nobody
+# NOTE: We stay as root user because entrypoint needs to write to /etc/coturn/
+# The turnserver process itself will drop privileges automatically
 
 # Expose ports
 EXPOSE 3478 3478/udp 5349 5349/udp
