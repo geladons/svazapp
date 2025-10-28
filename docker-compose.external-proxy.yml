@@ -129,8 +129,10 @@ services:
       - '${COTURN_MIN_PORT}-${COTURN_MAX_PORT}:${COTURN_MIN_PORT}-${COTURN_MAX_PORT}/udp'
     environment:
       DEPLOYMENT_SCENARIO: external-proxy
-      DETECT_EXTERNAL_IP: 'yes'
-      DETECT_RELAY_IP: 'yes'
+      # External IP is provided via .env file (auto-detected during installation)
+      EXTERNAL_IP: ${EXTERNAL_IP}
+      DETECT_EXTERNAL_IP: 'no'
+      DETECT_RELAY_IP: 'no'
       REALM: ${COTURN_REALM}
       USERNAME: ${COTURN_USER}
       PASSWORD: ${COTURN_PASSWORD}

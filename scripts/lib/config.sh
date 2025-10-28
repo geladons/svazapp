@@ -4,6 +4,47 @@
 # CONFIGURATION COLLECTION
 # =============================================================================
 
+# Detect external IP for TURN server
+detect_and_confirm_external_ip() {
+    echo ""
+    print_info "Detecting external IP address for TURN server..."
+    echo ""
+    echo "ℹ️  TURN server needs to know the external IP address to work properly through NAT."
+    echo ""
+
+    # Try to resolve domain IP
+    local detected_ip=""
+    if command -v dig >/dev/null 2>&1; then
+        detected_ip=$(dig +short "$USER_DOMAIN" A | head -n1)
+    elif command -v nslookup >/dev/null 2>&1; then
+        detected_ip=$(nslookup "$USER_DOMAIN" | grep -A1 "Name:" | grep "Address:" | awk '{print $2}' | head -n1)
+    elif command -v host >/dev/null 2>&1; then
+        detected_ip=$(host "$USER_DOMAIN" | grep "has address" | awk '{print $4}' | head -n1)
+    fi
+
+    # Show detected IP
+    if [ -n "$detected_ip" ]; then
+        echo "✅ Detected IP for $USER_DOMAIN: $detected_ip"
+        echo ""
+        read_input "External IP address (press Enter to use detected IP)" "$detected_ip" EXTERNAL_IP
+    else
+        echo "⚠️  Could not automatically detect IP for $USER_DOMAIN"
+        echo ""
+        read_input "External IP address (required for TURN server)" "" EXTERNAL_IP
+    fi
+
+    # Validate IP format
+    if [[ ! "$EXTERNAL_IP" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        print_error "Invalid IP address format: $EXTERNAL_IP"
+        print_error "Please enter a valid IPv4 address (e.g., 192.168.1.1)"
+        detect_and_confirm_external_ip  # Retry
+        return
+    fi
+
+    echo "✅ External IP set to: $EXTERNAL_IP"
+    echo ""
+}
+
 # Collect user configuration (Quick mode)
 collect_config_quick() {
     print_header "STEP 3: Configuration"
@@ -28,6 +69,9 @@ collect_config_quick() {
         fi
     done
     
+    # Detect external IP for TURN server
+    detect_and_confirm_external_ip
+
     print_success "Configuration collected"
     echo ""
 }
@@ -58,7 +102,10 @@ collect_config_advanced() {
     
     # Installation directory
     read_input "Installation directory" "$DEFAULT_INSTALL_DIR" INSTALL_DIR
-    
+
+    # Detect external IP for TURN server
+    detect_and_confirm_external_ip
+
     print_success "Configuration collected"
     echo ""
 }
@@ -101,6 +148,7 @@ generate_env_file() {
     sed -i "s|POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$postgres_password|" .env
     sed -i "s|DATABASE_URL=postgresql://svazapp:.*@db:5432/svazapp|DATABASE_URL=postgresql://svazapp:$postgres_password@db:5432/svazapp|" .env
     sed -i "s|CORS_ORIGIN=.*|CORS_ORIGIN=https://$USER_DOMAIN|" .env
+    sed -i "s|EXTERNAL_IP=.*|EXTERNAL_IP=$EXTERNAL_IP|" .env
     
     # Update URLs
     if [ "$DEPLOYMENT_SCENARIO" = "standalone" ]; then

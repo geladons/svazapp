@@ -18,38 +18,40 @@ echo "ℹ️  Deployment scenario: $SCENARIO"
 echo ""
 
 # Detect external IP
-if [ "$DETECT_EXTERNAL_IP" = "yes" ]; then
+# Priority: 1) EXTERNAL_IP env var, 2) Auto-detection, 3) Container IP
+if [ -n "$EXTERNAL_IP" ] && [ "$EXTERNAL_IP" != "0.0.0.0" ]; then
+  echo "✅ Using EXTERNAL_IP from environment: $EXTERNAL_IP"
+elif [ "$DETECT_EXTERNAL_IP" = "yes" ]; then
   echo "🔍 Detecting external IP address..."
 
-  # Check if timeout command exists
-  if command -v timeout >/dev/null 2>&1; then
-    # Try multiple services to detect external IP (with timeout)
-    EXTERNAL_IP=$(timeout 5 curl -s -4 https://api.ipify.org 2>/dev/null || \
-                  timeout 5 curl -s -4 https://ifconfig.me 2>/dev/null || \
-                  timeout 5 curl -s -4 https://icanhazip.com 2>/dev/null || \
-                  echo "")
-  else
-    # Fallback without timeout command
-    echo "⚠️  timeout command not available, using curl without timeout"
-    EXTERNAL_IP=$(curl -s -4 --max-time 5 https://api.ipify.org 2>/dev/null || \
-                  curl -s -4 --max-time 5 https://ifconfig.me 2>/dev/null || \
-                  curl -s -4 --max-time 5 https://icanhazip.com 2>/dev/null || \
+  # Use Cloudflare trace API with direct IP (no DNS required)
+  # This is more reliable than domain-based services
+  DETECTED_IP=$(timeout 3 curl -s -4 --connect-timeout 2 --max-time 3 http://1.1.1.1/cdn-cgi/trace 2>/dev/null | grep -oP 'ip=\K[0-9.]+' || echo "")
+
+  # Fallback to domain-based services if Cloudflare fails
+  if [ -z "$DETECTED_IP" ]; then
+    echo "⏳ Cloudflare trace failed, trying domain-based services..."
+    DETECTED_IP=$(timeout 3 curl -s -4 --connect-timeout 2 --max-time 3 https://api.ipify.org 2>/dev/null || \
+                  timeout 3 curl -s -4 --connect-timeout 2 --max-time 3 https://ifconfig.me 2>/dev/null || \
                   echo "")
   fi
 
-  if [ -n "$EXTERNAL_IP" ]; then
-    echo "✅ Detected external IP: $EXTERNAL_IP"
-    export EXTERNAL_IP
+  if [ -n "$DETECTED_IP" ]; then
+    echo "✅ Detected external IP: $DETECTED_IP"
+    EXTERNAL_IP="$DETECTED_IP"
   else
-    echo "⚠️  Could not detect external IP, using container IP"
+    echo "⚠️  Could not detect external IP from internet services"
+    echo "⚠️  This may cause TURN to not work properly through NAT"
+    echo "⚠️  Using container IP as fallback: $(hostname -i | awk '{print $1}')"
+    echo "⚠️  Consider setting EXTERNAL_IP environment variable"
     EXTERNAL_IP=$(hostname -i | awk '{print $1}')
-    export EXTERNAL_IP
   fi
 else
-  echo "ℹ️  External IP detection disabled"
+  echo "ℹ️  External IP detection disabled, using container IP"
   EXTERNAL_IP=$(hostname -i | awk '{print $1}')
-  export EXTERNAL_IP
 fi
+
+export EXTERNAL_IP
 
 # Detect relay IP (same as external IP in most cases)
 if [ "$DETECT_RELAY_IP" = "yes" ]; then
