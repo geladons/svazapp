@@ -47,22 +47,39 @@ echo "ℹ️  Database: $DB_HOST:$DB_PORT"
 MAX_RETRIES=30
 RETRY_COUNT=0
 
-until nc -z "$DB_HOST" "$DB_PORT" 2>/dev/null; do
+echo "⏳ Waiting for database at $DB_HOST:$DB_PORT..."
+
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+  # Use timeout to prevent nc from hanging indefinitely
+  # -w 2 = wait max 2 seconds for connection
+  if timeout 3 nc -z -w 2 "$DB_HOST" "$DB_PORT" 2>/dev/null; then
+    echo "✅ Database is ready!"
+    break
+  fi
+
   RETRY_COUNT=$((RETRY_COUNT + 1))
 
   if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
-    echo "❌ Database is still unavailable after $MAX_RETRIES attempts"
+    echo "❌ Database is still unavailable after $MAX_RETRIES attempts (60 seconds)"
     echo "❌ DATABASE_URL: $DATABASE_URL"
     echo "❌ Parsed DB_HOST: $DB_HOST"
     echo "❌ Parsed DB_PORT: $DB_PORT"
+    echo ""
+    echo "Possible causes:"
+    echo "  1. Database container is not running"
+    echo "  2. Docker network is broken (check iptables/UFW)"
+    echo "  3. DATABASE_URL is incorrect"
+    echo ""
+    echo "Debug commands:"
+    echo "  docker compose ps"
+    echo "  docker compose logs db"
+    echo "  sudo iptables -L DOCKER-USER -n"
     exit 1
   fi
 
-  echo "⏳ Database is unavailable - sleeping for 2 seconds... (attempt $RETRY_COUNT/$MAX_RETRIES)"
+  echo "⏳ Database unavailable - retrying in 2 seconds... (attempt $RETRY_COUNT/$MAX_RETRIES)"
   sleep 2
 done
-
-echo "✅ Database is ready!"
 
 # Run database migrations
 echo "🔄 Running database migrations..."
