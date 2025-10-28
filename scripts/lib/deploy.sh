@@ -41,7 +41,7 @@ cleanup_old_containers() {
     # Stop and remove old containers if they exist
     if docker compose -f "$compose_file" ps -q 2>/dev/null | grep -q .; then
         print_info "Stopping and removing old containers..."
-        docker compose -f "$compose_file" down --remove-orphans || true
+        docker compose -f "$compose_file" down --remove-orphans --timeout 10 || true
     else
         print_info "No old containers found"
     fi
