@@ -27,6 +27,28 @@ clone_repository() {
     print_success "Repository cloned"
 }
 
+# Clean up old containers
+cleanup_old_containers() {
+    print_step "Cleaning up old containers..."
+
+    local compose_file
+    if [ "$DEPLOYMENT_SCENARIO" = "standalone" ]; then
+        compose_file="docker-compose.yml"
+    else
+        compose_file="docker-compose.external-proxy.yml"
+    fi
+
+    # Stop and remove old containers if they exist
+    if docker compose -f "$compose_file" ps -q 2>/dev/null | grep -q .; then
+        print_info "Stopping and removing old containers..."
+        docker compose -f "$compose_file" down --remove-orphans || true
+    else
+        print_info "No old containers found"
+    fi
+
+    print_success "Cleanup complete"
+}
+
 # Deploy services
 deploy_services() {
     print_step "Deploying services..."

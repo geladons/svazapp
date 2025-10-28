@@ -200,10 +200,13 @@ main() {
 
     print_header "Configuring Firewall"
     configure_firewall
-    
+
+    print_header "Cleaning Up Old Containers"
+    cleanup_old_containers
+
     print_header "Deploying Services"
     deploy_services
-    
+
     print_header "Verifying Installation"
     verify_installation
     
