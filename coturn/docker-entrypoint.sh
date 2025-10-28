@@ -80,9 +80,13 @@ if [ "$SCENARIO" = "standalone" ]; then
   echo "⏳ Waiting for Caddy SSL certificates..."
   echo "   Certificate: $CERT_PATH"
   echo "   Key: $KEY_PATH"
+  echo ""
+  echo "   This may take 1-2 minutes for Caddy to obtain certificates from Let's Encrypt..."
+  echo "   If DNS is not configured correctly, this will timeout after 2 minutes."
+  echo ""
 
-  # Wait up to 5 minutes (60 iterations * 5 seconds)
-  for i in $(seq 1 60); do
+  # Wait up to 2 minutes (24 iterations * 5 seconds)
+  for i in $(seq 1 24); do
     if [ -f "$CERT_PATH" ] && [ -f "$KEY_PATH" ]; then
       echo "✅ Caddy SSL certificates found!"
       CERT_FILE="$CERT_PATH"
@@ -99,9 +103,18 @@ if [ "$SCENARIO" = "standalone" ]; then
   done
 
   if [ "$TLS_ENABLED" = false ]; then
-    echo "⚠️  WARNING: SSL certificates not found after 5 minutes"
+    echo ""
+    echo "⚠️  WARNING: SSL certificates not found after 2 minutes"
     echo "⚠️  TURNS (port 5349) will NOT work without certificates"
     echo "⚠️  CoTURN will start with STUN/TURN only (port 3478)"
+    echo ""
+    echo "   Possible reasons:"
+    echo "   - DNS A record for $DOMAIN is not pointing to this server"
+    echo "   - Port 80 is not accessible (required for Let's Encrypt validation)"
+    echo "   - Let's Encrypt rate limit exceeded (5 certs/week per domain)"
+    echo ""
+    echo "   Check Caddy logs: docker compose logs caddy"
+    echo ""
   fi
 
 elif [ "$SCENARIO" = "external-proxy" ]; then

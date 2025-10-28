@@ -187,6 +187,12 @@ main() {
     print_header "Generating Configuration"
     generate_env_file
 
+    # Check DNS configuration (only for standalone scenario)
+    if [ "$DEPLOYMENT_SCENARIO" = "standalone" ]; then
+        print_header "Checking DNS Configuration"
+        check_dns_configuration "$USER_DOMAIN" "$DEPLOYMENT_SCENARIO"
+    fi
+
     # Setup CoTURN SSL (only for external-proxy scenario)
     if [ "$DEPLOYMENT_SCENARIO" = "external-proxy" ]; then
         setup_coturn_ssl
