@@ -30,46 +30,57 @@ clone_repository() {
 # Deploy services
 deploy_services() {
     print_step "Deploying services..."
-    
+
     local compose_file
     if [ "$DEPLOYMENT_SCENARIO" = "standalone" ]; then
         compose_file="docker-compose.yml"
     else
         compose_file="docker-compose.external-proxy.yml"
     fi
-    
+
     print_info "Using compose file: $compose_file"
-    
+
     # Pull images
-    docker compose -f "$compose_file" pull
-    
+    print_info "Pulling Docker images..."
+    docker compose -f "$compose_file" pull || true
+
     # Build services
+    print_info "Building services (this may take 5-10 minutes)..."
     docker compose -f "$compose_file" build
-    
+
     # Start services
+    print_info "Starting services..."
+    print_info "This may take 1-2 minutes for all services to become healthy..."
     docker compose -f "$compose_file" up -d
-    
+
     print_success "Services deployed"
 }
 
 # Verify installation
 verify_installation() {
     print_step "Verifying installation..."
-    
+
     local compose_file
     if [ "$DEPLOYMENT_SCENARIO" = "standalone" ]; then
         compose_file="docker-compose.yml"
     else
         compose_file="docker-compose.external-proxy.yml"
     fi
-    
+
     # Wait for services to start
-    sleep 10
-    
+    print_info "Waiting for services to initialize..."
+    sleep 20
+
+    # Show container status
+    echo ""
+    print_info "Container Status:"
+    docker compose -f "$compose_file" ps
+    echo ""
+
     # Check if all containers are running
     local running_containers=$(docker compose -f "$compose_file" ps --services --filter "status=running" | wc -l)
     local total_containers=$(docker compose -f "$compose_file" ps --services | wc -l)
-    
+
     if [ "$running_containers" -eq "$total_containers" ]; then
         print_success "All services are running ($running_containers/$total_containers)"
     else

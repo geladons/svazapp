@@ -48,11 +48,7 @@ services:
       DOMAIN: ${DOMAIN}
     networks:
       - svazapp-network
-    healthcheck:
-      test: ['CMD', 'node', '-e', "require('http').get('http://localhost:${API_PORT}/api/health')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    # Note: healthcheck is defined in Dockerfile and will be used automatically
 
   # =============================================================================
   # FRONTEND SERVICE (Next.js PWA)
@@ -71,7 +67,8 @@ services:
     container_name: svazapp-frontend
     restart: unless-stopped
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     environment:
       NODE_ENV: ${NODE_ENV}
       PORT: ${FRONTEND_PORT}
