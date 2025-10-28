@@ -75,42 +75,106 @@ install_git() {
 # Configure firewall
 configure_firewall() {
     print_step "Configuring firewall..."
-    
+
     if ! command -v ufw &> /dev/null; then
         print_warning "UFW not installed, skipping firewall configuration"
         return 0
     fi
-    
+
     if ! ask_yes_no "Configure firewall (UFW) automatically?" "y"; then
         print_info "Skipping firewall configuration"
         return 0
     fi
-    
-    # Allow SSH first (important!)
-    sudo ufw allow 22/tcp
-    
+
+    print_warning "⚠️  IMPORTANT: Configuring UFW for Docker compatibility"
+    echo ""
+    echo "UFW must be configured BEFORE enabling to avoid breaking Docker networking."
+    echo "We will:"
+    echo "  1. Configure UFW to allow Docker traffic"
+    echo "  2. Add rules for required ports"
+    echo "  3. Enable UFW with Docker-compatible settings"
+    echo ""
+
+    # Disable UFW first to ensure clean state
+    sudo ufw --force disable 2>/dev/null || true
+
+    # Configure UFW to work with Docker
+    # This prevents UFW from breaking Docker's iptables rules
+    print_info "Configuring UFW for Docker compatibility..."
+
+    # Backup existing UFW config
+    if [ -f /etc/default/ufw ]; then
+        sudo cp /etc/default/ufw /etc/default/ufw.backup.$(date +%s) 2>/dev/null || true
+    fi
+
+    # Set DEFAULT_FORWARD_POLICY to ACCEPT (required for Docker)
+    sudo sed -i 's/DEFAULT_FORWARD_POLICY="DROP"/DEFAULT_FORWARD_POLICY="ACCEPT"/' /etc/default/ufw 2>/dev/null || true
+
+    # Add Docker-specific rules to UFW before.rules
+    if [ -f /etc/ufw/before.rules ]; then
+        # Check if Docker rules already exist
+        if ! grep -q "# BEGIN DOCKER RULES" /etc/ufw/before.rules; then
+            print_info "Adding Docker rules to UFW..."
+            sudo cp /etc/ufw/before.rules /etc/ufw/before.rules.backup.$(date +%s)
+
+            # Add Docker rules at the end of *filter section
+            sudo sed -i '/^COMMIT$/i \
+# BEGIN DOCKER RULES - Allow Docker container networking\
+-A ufw-before-forward -j ACCEPT -s 172.16.0.0/12 -d 172.16.0.0/12\
+-A ufw-before-forward -j ACCEPT -s 10.0.0.0/8 -d 10.0.0.0/8\
+# END DOCKER RULES' /etc/ufw/before.rules
+        fi
+    fi
+
+    # Reset UFW to apply new settings
+    print_info "Resetting UFW with new configuration..."
+    echo "y" | sudo ufw reset 2>/dev/null || true
+
+    # Set default policies
+    sudo ufw default deny incoming
+    sudo ufw default allow outgoing
+    sudo ufw default allow routed
+
+    # Allow SSH first (CRITICAL - prevents lockout!)
+    print_info "Allowing SSH (port 22)..."
+    sudo ufw allow 22/tcp comment 'SSH'
+
     if [ "$DEPLOYMENT_SCENARIO" = "standalone" ]; then
         # Standalone mode: Caddy handles HTTP/HTTPS
-        sudo ufw allow 80/tcp
-        sudo ufw allow 443/tcp
-        sudo ufw allow 443/udp
+        print_info "Allowing HTTP/HTTPS for Caddy..."
+        sudo ufw allow 80/tcp comment 'HTTP for Caddy'
+        sudo ufw allow 443/tcp comment 'HTTPS for Caddy'
+        sudo ufw allow 443/udp comment 'HTTP/3 for Caddy'
     else
         # External proxy mode: Expose frontend, API, LiveKit
-        sudo ufw allow 3000/tcp
-        sudo ufw allow 8080/tcp
-        sudo ufw allow 7880/tcp
+        print_info "Allowing application ports for external proxy..."
+        sudo ufw allow 3000/tcp comment 'Frontend'
+        sudo ufw allow 8080/tcp comment 'API'
+        sudo ufw allow 7880/tcp comment 'LiveKit'
     fi
-    
+
     # CoTURN ports (both scenarios)
-    sudo ufw allow 3478/tcp
-    sudo ufw allow 3478/udp
-    sudo ufw allow 5349/tcp
-    sudo ufw allow 5349/udp
-    sudo ufw allow 49152:65535/udp
-    
-    # Enable firewall
+    print_info "Allowing CoTURN ports..."
+    sudo ufw allow 3478/tcp comment 'CoTURN STUN/TURN'
+    sudo ufw allow 3478/udp comment 'CoTURN STUN/TURN'
+    sudo ufw allow 5349/tcp comment 'CoTURN TURNS'
+    sudo ufw allow 5349/udp comment 'CoTURN TURNS'
+    sudo ufw allow 49152:65535/udp comment 'CoTURN relay ports'
+
+    # Enable firewall with Docker-compatible settings
+    print_info "Enabling UFW..."
     sudo ufw --force enable
-    
-    print_success "Firewall configured"
+
+    # Restart Docker to ensure it re-creates iptables rules
+    print_info "Restarting Docker to apply firewall changes..."
+    sudo systemctl restart docker
+
+    # Wait for Docker to fully restart
+    sleep 3
+
+    print_success "Firewall configured with Docker compatibility"
+    echo ""
+    print_info "UFW Status:"
+    sudo ufw status verbose | head -20
 }
 
