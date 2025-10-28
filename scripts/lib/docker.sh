@@ -72,23 +72,151 @@ install_git() {
     print_success "Git installed successfully"
 }
 
+# =============================================================================
+# SYSTEM COMPATIBILITY CHECKS
+# =============================================================================
+
+# Detect existing Docker containers
+detect_existing_docker_containers() {
+    if ! command -v docker &> /dev/null; then
+        return 1
+    fi
+
+    local running_containers=$(docker ps -q 2>/dev/null | wc -l)
+    if [ "$running_containers" -gt 0 ]; then
+        return 0  # Has running containers
+    fi
+    return 1  # No running containers
+}
+
+# Check if port is in use
+check_port_conflict() {
+    local port=$1
+    local protocol=${2:-tcp}
+
+    # Check if port is bound by any process
+    if command -v ss &> /dev/null; then
+        if ss -ln${protocol:0:1} | grep -q ":$port "; then
+            return 0  # Port is in use
+        fi
+    elif command -v netstat &> /dev/null; then
+        if netstat -ln${protocol:0:1} | grep -q ":$port "; then
+            return 0  # Port is in use
+        fi
+    fi
+    return 1  # Port is free
+}
+
+# Get process using port
+get_port_owner() {
+    local port=$1
+    local protocol=${2:-tcp}
+
+    if command -v ss &> /dev/null; then
+        ss -lnp${protocol:0:1} | grep ":$port " | awk '{print $NF}' | head -1
+    elif command -v lsof &> /dev/null; then
+        lsof -i ${protocol}:${port} -t 2>/dev/null | head -1 | xargs ps -p 2>/dev/null | tail -1
+    else
+        echo "unknown"
+    fi
+}
+
+# Check all required ports
+check_port_conflicts() {
+    print_step "Checking for port conflicts..."
+
+    local conflicts=()
+    local ports_to_check=()
+
+    # Determine which ports we need based on scenario
+    if [ "$DEPLOYMENT_SCENARIO" = "standalone" ]; then
+        # Standalone: Caddy + CoTURN
+        ports_to_check=(80 443 3478 5349)
+    else
+        # External proxy mode: Frontend, API, LiveKit, CoTURN
+        # NOTE: PostgreSQL (5432) is NOT exposed to host, only internal Docker network
+        ports_to_check=(3000 8080 7880 3478 5349)
+    fi
+
+    # Check each port
+    for port in "${ports_to_check[@]}"; do
+        if check_port_conflict "$port"; then
+            local owner=$(get_port_owner "$port")
+            conflicts+=("Port $port is already in use by: $owner")
+        fi
+    done
+
+    if [ ${#conflicts[@]} -gt 0 ]; then
+        print_warning "⚠️  Port conflicts detected:"
+        echo ""
+        for conflict in "${conflicts[@]}"; do
+            echo "  ❌ $conflict"
+        done
+        echo ""
+        echo "These ports are required by svaz.app:"
+        if [ "$DEPLOYMENT_SCENARIO" = "standalone" ]; then
+            echo "  - 80, 443: Caddy (HTTP/HTTPS)"
+        else
+            echo "  - 3000: Frontend (Next.js)"
+            echo "  - 8080: API (Fastify)"
+            echo "  - 7880: LiveKit (WebRTC SFU)"
+        fi
+        echo "  - 3478, 5349: CoTURN (STUN/TURN)"
+        echo ""
+        echo "NOTE: PostgreSQL (5432) is NOT exposed to host for security."
+        echo "      It's only accessible within Docker network."
+        echo ""
+
+        if ! ask_yes_no "Continue anyway? (Installation may fail)" "n"; then
+            print_error "Installation cancelled due to port conflicts"
+            exit 1
+        fi
+    else
+        print_success "✓ No port conflicts detected"
+    fi
+}
+
+# =============================================================================
+# FIREWALL CONFIGURATION (MINIMAL, NON-INVASIVE)
+# =============================================================================
+
 # Configure firewall
 configure_firewall() {
     print_step "Configuring firewall..."
 
     if ! command -v ufw &> /dev/null; then
         print_warning "UFW not installed, skipping firewall configuration"
+        print_info "Make sure to manually configure your firewall to allow required ports"
         return 0
     fi
 
     # Check if UFW is already enabled
     local ufw_status=$(sudo ufw status | head -1)
+    local ufw_was_active=false
+
     if echo "$ufw_status" | grep -q "Status: active"; then
+        ufw_was_active=true
         print_warning "⚠️  UFW is already active with existing rules"
         echo ""
-        echo "IMPORTANT: We will NOT reset your existing firewall configuration."
-        echo "We will only ADD the required ports for svaz.app."
+        echo "IMPORTANT: We will NOT modify your global firewall configuration."
+        echo "We will ONLY add the specific ports required by svaz.app."
         echo ""
+
+        # Check if Docker is running
+        if detect_existing_docker_containers; then
+            print_warning "⚠️  Detected running Docker containers on this server"
+            echo ""
+            echo "To avoid breaking your existing containers, we will:"
+            echo "  1. Add ONLY svaz.app ports to UFW (no global changes)"
+            echo "  2. NOT reload UFW (to avoid disrupting existing containers)"
+            echo "  3. NOT modify DEFAULT_FORWARD_POLICY"
+            echo "  4. NOT add global Docker network rules"
+            echo ""
+            echo "Your existing containers will continue working normally."
+            echo "New UFW rules will take effect after system reboot."
+            echo ""
+        fi
+
         if ! ask_yes_no "Add svaz.app ports to existing UFW configuration?" "y"; then
             print_info "Skipping firewall configuration"
             print_warning "⚠️  Make sure to manually open required ports!"
@@ -101,69 +229,18 @@ configure_firewall() {
         fi
     fi
 
-    print_info "Configuring UFW for Docker compatibility..."
-    echo ""
-
-    # Backup existing UFW config (non-destructive)
-    if [ -f /etc/default/ufw ]; then
-        if [ ! -f /etc/default/ufw.backup.svazapp ]; then
-            sudo cp /etc/default/ufw /etc/default/ufw.backup.svazapp 2>/dev/null || true
-            print_info "✓ Backed up /etc/default/ufw"
-        fi
-    fi
-
-    # Set DEFAULT_FORWARD_POLICY to ACCEPT (required for Docker)
-    # This is the ONLY change we make to /etc/default/ufw
-    if grep -q 'DEFAULT_FORWARD_POLICY="DROP"' /etc/default/ufw 2>/dev/null; then
-        print_info "Setting DEFAULT_FORWARD_POLICY=ACCEPT for Docker..."
-        sudo sed -i.bak 's/DEFAULT_FORWARD_POLICY="DROP"/DEFAULT_FORWARD_POLICY="ACCEPT"/' /etc/default/ufw
-        print_success "✓ DEFAULT_FORWARD_POLICY set to ACCEPT"
-    else
-        print_info "✓ DEFAULT_FORWARD_POLICY already set correctly"
-    fi
-
-    # Add Docker-specific rules to UFW before.rules (if not already present)
-    if [ -f /etc/ufw/before.rules ]; then
-        if ! grep -q "# BEGIN SVAZAPP DOCKER RULES" /etc/ufw/before.rules; then
-            print_info "Adding Docker network rules to UFW..."
-
-            # Backup before.rules
-            if [ ! -f /etc/ufw/before.rules.backup.svazapp ]; then
-                sudo cp /etc/ufw/before.rules /etc/ufw/before.rules.backup.svazapp
-            fi
-
-            # Add Docker rules BEFORE the final COMMIT
-            sudo sed -i '/^COMMIT$/i \
-# BEGIN SVAZAPP DOCKER RULES - Allow Docker container networking\
--A ufw-before-forward -j ACCEPT -s 172.16.0.0/12 -d 172.16.0.0/12\
--A ufw-before-forward -j ACCEPT -s 10.0.0.0/8 -d 10.0.0.0/8\
-# END SVAZAPP DOCKER RULES' /etc/ufw/before.rules
-
-            print_success "✓ Docker network rules added"
-        else
-            print_info "✓ Docker network rules already present"
-        fi
-    fi
-
-    # Set default policies (only if UFW was not active before)
-    if ! echo "$ufw_status" | grep -q "Status: active"; then
-        print_info "Setting default UFW policies..."
-        sudo ufw default deny incoming
-        sudo ufw default allow outgoing
-        sudo ufw default allow routed
-    fi
-
-    # Add application-specific rules (non-destructive - only adds if not present)
+    # Add application-specific rules ONLY (non-destructive)
     print_info "Adding svaz.app ports to UFW..."
+    echo ""
 
     # Allow SSH first (CRITICAL - prevents lockout!)
     sudo ufw allow 22/tcp comment 'SSH' 2>/dev/null || true
 
     if [ "$DEPLOYMENT_SCENARIO" = "standalone" ]; then
         # Standalone mode: Caddy handles HTTP/HTTPS
-        sudo ufw allow 80/tcp comment 'HTTP for Caddy' 2>/dev/null || true
-        sudo ufw allow 443/tcp comment 'HTTPS for Caddy' 2>/dev/null || true
-        sudo ufw allow 443/udp comment 'HTTP/3 for Caddy' 2>/dev/null || true
+        sudo ufw allow 80/tcp comment 'svaz.app HTTP' 2>/dev/null || true
+        sudo ufw allow 443/tcp comment 'svaz.app HTTPS' 2>/dev/null || true
+        sudo ufw allow 443/udp comment 'svaz.app HTTP/3' 2>/dev/null || true
     else
         # External proxy mode: Expose frontend, API, LiveKit
         sudo ufw allow 3000/tcp comment 'svaz.app Frontend' 2>/dev/null || true
@@ -179,20 +256,34 @@ configure_firewall() {
     sudo ufw allow 49152:65535/udp comment 'svaz.app CoTURN relay' 2>/dev/null || true
 
     # Enable firewall (if not already enabled)
-    if ! echo "$ufw_status" | grep -q "Status: active"; then
-        print_info "Enabling UFW..."
+    if ! $ufw_was_active; then
+        print_info "Enabling UFW with default policies..."
+        sudo ufw default deny incoming
+        sudo ufw default allow outgoing
         sudo ufw --force enable
+        print_success "✓ UFW enabled"
     else
-        print_info "Reloading UFW to apply new rules..."
-        sudo ufw reload
+        # UFW was already active - do NOT reload if Docker is running
+        if detect_existing_docker_containers; then
+            print_warning "⚠️  UFW rules added but NOT reloaded (Docker containers are running)"
+            print_info "New rules will take effect after system reboot or manual reload"
+            print_info "To manually reload: docker compose down && sudo ufw reload && docker compose up -d"
+        else
+            print_info "Reloading UFW to apply new rules..."
+            sudo ufw reload
+            print_success "✓ UFW reloaded"
+        fi
     fi
 
     print_success "Firewall configured successfully"
     echo ""
-    print_info "UFW Status:"
-    sudo ufw status verbose | head -25
+    print_info "UFW Status (svaz.app rules):"
+    sudo ufw status | grep -E "svaz\.app|CoTURN|SSH" || echo "  (No svaz.app rules found - may need reboot)"
     echo ""
-    print_warning "⚠️  IMPORTANT: Docker will manage its own iptables rules."
-    print_warning "⚠️  Do NOT restart Docker after this point - it may break networking!"
+
+    if detect_existing_docker_containers; then
+        print_info "✓ Your existing Docker containers were not affected"
+        print_info "✓ No global Docker/iptables changes were made"
+    fi
 }
 

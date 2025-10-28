@@ -177,15 +177,19 @@ main() {
     
     # Start installation
     print_header "Installing Dependencies"
-    
+
     install_docker
     install_git
-    
+
     print_header "Cloning Repository"
     clone_repository
-    
+
     print_header "Generating Configuration"
     generate_env_file
+
+    # Check for port conflicts BEFORE proceeding
+    print_header "Checking System Compatibility"
+    check_port_conflicts
 
     # Check DNS configuration (only for standalone scenario)
     if [ "$DEPLOYMENT_SCENARIO" = "standalone" ]; then
@@ -209,7 +213,7 @@ main() {
 
     print_header "Verifying Installation"
     verify_installation
-    
+
     # Print post-installation instructions
     print_post_install
 }

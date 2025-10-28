@@ -21,8 +21,12 @@ services:
     image: postgres:16-alpine
     container_name: svazapp-db
     restart: unless-stopped
-    ports:
-      - '5432:5432'
+    # SECURITY: Database is NOT exposed to host network
+    # Only accessible from other containers in svazapp-network
+    # If you need external access for debugging, use:
+    #   docker compose exec db psql -U svazapp
+    # ports:
+    #   - '5432:5432'  # DISABLED for security
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
