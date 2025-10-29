@@ -177,6 +177,8 @@ deploy_services_lxc() {
         compose_file="docker-compose.yml"
     else
         compose_file="docker-compose.external-proxy.yml"
+        # Ensure coturn-certs directory exists (required for volume mount)
+        mkdir -p "$INSTALL_DIR/coturn-certs"
     fi
 
     print_info "Using compose file: $compose_file"
@@ -275,6 +277,8 @@ deploy_services() {
         compose_file="docker-compose.yml"
     else
         compose_file="docker-compose.external-proxy.yml"
+        # Ensure coturn-certs directory exists (required for volume mount)
+        mkdir -p "$INSTALL_DIR/coturn-certs"
     fi
 
     print_info "Using compose file: $compose_file"
