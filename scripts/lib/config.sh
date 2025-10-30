@@ -137,6 +137,18 @@ generate_env_file() {
     local livekit_api_secret=$(generate_secret 32)
     local postgres_password=$(generate_secret 32)
     
+    # URL-encode the password for the DATABASE_URL string
+    local postgres_password_encoded=$(echo "$postgres_password" | sed \
+        -e 's:%:%25:g' \
+        -e 's:/:%2F:g' \
+        -e 's:?:%3F:g' \
+        -e 's:#:%23:g' \
+        -e 's:&:%26:g' \
+        -e 's:=:%3D:g' \
+        -e 's:@:%40:g' \
+        -e 's: :%20:g' \
+        -e 's:+:%2B:g')
+    
     # Replace values in .env
     sed -i "s|DOMAIN=.*|DOMAIN=$USER_DOMAIN|" .env
     sed -i "s|SSL_EMAIL=.*|SSL_EMAIL=$USER_EMAIL|" .env
@@ -146,7 +158,7 @@ generate_env_file() {
     sed -i "s|LIVEKIT_API_KEY=.*|LIVEKIT_API_KEY=$livekit_api_key|" .env
     sed -i "s|LIVEKIT_API_SECRET=.*|LIVEKIT_API_SECRET=$livekit_api_secret|" .env
     sed -i "s|POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$postgres_password|" .env
-    sed -i "s|DATABASE_URL=postgresql://svazapp:.*@db:5432/svazapp|DATABASE_URL=postgresql://svazapp:$postgres_password@db:5432/svazapp|" .env
+    sed -i "s|DATABASE_URL=postgresql://svazapp:.*@db:5432/svazapp|DATABASE_URL=postgresql://svazapp:$postgres_password_encoded@db:5432/svazapp|" .env
     sed -i "s|CORS_ORIGIN=.*|CORS_ORIGIN=https://$USER_DOMAIN|" .env
     sed -i "s|EXTERNAL_IP=.*|EXTERNAL_IP=$EXTERNAL_IP|" .env
     
