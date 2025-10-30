@@ -187,6 +187,12 @@ main() {
     print_header "Generating Configuration"
     generate_env_file
 
+    print_info "Loading environment variables..."
+    # Load environment variables from .env file
+    set -a
+    source .env
+    set +a
+
     print_info "Generating LiveKit configuration..."
     generate_livekit_config
     print_success "LiveKit configuration generated"

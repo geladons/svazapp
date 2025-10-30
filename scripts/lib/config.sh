@@ -184,6 +184,17 @@ generate_env_file() {
 generate_livekit_config() {
     print_step "Generating LiveKit configuration..."
     
+    # Check if required environment variables are set
+    if [ -z "${LIVEKIT_API_KEY+x}" ]; then
+        print_error "LIVEKIT_API_KEY environment variable is not set"
+        exit 1
+    fi
+    
+    if [ -z "${LIVEKIT_API_SECRET+x}" ]; then
+        print_error "LIVEKIT_API_SECRET environment variable is not set"
+        exit 1
+    fi
+    
     # Check if template exists
     if [ ! -f "livekit/livekit.yaml.template" ]; then
         print_error "LiveKit template file livekit/livekit.yaml.template not found"
