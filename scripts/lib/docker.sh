@@ -26,12 +26,12 @@ install_docker() {
             # Use safe apt update again after adding Docker repo
             safe_apt_update || exit 1
 
-            sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+            sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin gettext-base jq
             ;;
         centos|rhel|fedora)
             sudo yum install -y yum-utils
             sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-            sudo yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+            sudo yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin gettext-base jq
             sudo systemctl start docker
             sudo systemctl enable docker
             ;;

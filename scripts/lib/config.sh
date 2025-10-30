@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 
 # =============================================================================
 # CONFIGURATION COLLECTION
@@ -174,5 +175,32 @@ generate_env_file() {
     fi
     
     print_success "Environment file generated"
+    
+    # Generate LiveKit configuration after .env is created
+    generate_livekit_config
+}
+
+# Generate LiveKit configuration file from template
+generate_livekit_config() {
+    print_step "Generating LiveKit configuration..."
+    
+    # Check if template exists
+    if [ ! -f "livekit/livekit.yaml.template" ]; then
+        print_error "LiveKit template file livekit/livekit.yaml.template not found"
+        exit 1
+    fi
+    
+    # Ensure livekit directory exists
+    mkdir -p livekit
+    
+    # Check if livekit.yaml already exists and was generated from the template
+    # If it exists, we'll regenerate it to ensure it has the correct values from .env
+    cp livekit/livekit.yaml.template livekit/livekit.yaml
+    
+    # Replace template values with environment variables using sed
+    sed -i "s|{LIVEKIT_API_KEY}|${LIVEKIT_API_KEY}|g" livekit/livekit.yaml
+    sed -i "s|{LIVEKIT_API_SECRET}|${LIVEKIT_API_SECRET}|g" livekit/livekit.yaml
+    
+    print_success "LiveKit configuration generated"
 }
 

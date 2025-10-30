@@ -115,6 +115,11 @@ services:
       - ./livekit/livekit.yaml:/etc/livekit.yaml
     networks:
       - svazapp-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7880/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # =============================================================================
   # COTURN SERVICE (STUN/TURN Server)
