@@ -187,9 +187,9 @@ main() {
     print_header "Generating Configuration"
     generate_env_file
 
-    echo_inf "Generating LiveKit configuration..."
+    print_info "Generating LiveKit configuration..."
     generate_livekit_config
-    echo_suc "LiveKit configuration generated"
+    print_success "LiveKit configuration generated"
 
     # Check for port conflicts BEFORE proceeding
     print_header "Checking System Compatibility"
