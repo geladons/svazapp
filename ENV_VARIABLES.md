@@ -43,7 +43,7 @@ These variables should be reviewed and adjusted for your environment:
 |----------|---------|----------------|
 | `CORS_ORIGIN` | `https://${DOMAIN}` | If using subdomain |
 | `COTURN_MIN_PORT` | `49152` | If port range blocked |
-| `COTURN_MAX_PORT` | `65535` | If port range blocked |
+| `COTURN_MAX_PORT` | `50151` | If port range blocked |
 | `JWT_EXPIRES_IN` | `90d` | If need shorter sessions |
 | `RATE_LIMIT_MAX` | `100` | If need stricter limits |
 
@@ -339,10 +339,10 @@ COTURN_PASSWORD=5mK8pL1vN4qR7wT0yU3iO6aS9dF2gH5jK8lM1nB4vC7xZ
 ### `COTURN_MIN_PORT` / `COTURN_MAX_PORT`
 
 - **Required**: ✅ Yes
-- **Default**: `49152` / `65535`
+- **Default**: `49152` / `50151`
 - **Must Change**: ⚠️ Only if port range blocked
 - **Description**: UDP port range for TURN media relay
-- **Range**: Minimum ~1000 ports recommended
+- **Range**: Minimum ~1000 ports recommended (RFC 8656)
 
 **When to Change**:
 - If firewall blocks high ports
@@ -353,6 +353,8 @@ COTURN_PASSWORD=5mK8pL1vN4qR7wT0yU3iO6aS9dF2gH5jK8lM1nB4vC7xZ
 COTURN_MIN_PORT=50000
 COTURN_MAX_PORT=51000  # 1000 ports (enough for ~500 concurrent calls)
 ```
+
+> **Note**: The standard port range 49152-65535 is very large and can cause issues in some environments (especially LXC containers). The new range 49152-50151 (1000 ports) is sufficient for most use cases and avoids Docker performance issues.
 
 ---
 
@@ -567,7 +569,7 @@ COTURN_PASSWORD=5mK8pL1vN4qR7wT0yU3iO6aS9dF2gH5jK8lM1nB4vC7xZ
 COTURN_LISTENING_PORT=3478
 COTURN_TLS_LISTENING_PORT=5349
 COTURN_MIN_PORT=49152
-COTURN_MAX_PORT=65535
+COTURN_MAX_PORT=50151
 
 # Frontend
 FRONTEND_PORT=3000

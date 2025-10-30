@@ -45,7 +45,7 @@ svaz.app supports two deployment scenarios with different port configurations:
 | **443** | UDP | Caddy | HTTP/3 (QUIC) | ⚠️ Optional |
 | **3478** | UDP/TCP | CoTURN | STUN/TURN server | ✅ Yes |
 | **5349** | UDP/TCP | CoTURN | TURNS (TURN over TLS) | ✅ Yes |
-| **49152-65535** | UDP | CoTURN | TURN relay port range | ✅ Yes |
+| **49152-50151** | UDP | CoTURN | TURN relay port range | ✅ Yes |
 
 ### Internal Ports (Docker Network Only)
 
@@ -91,7 +91,7 @@ sudo ufw enable
 | **443** | TCP | NPM/Traefik | HTTPS (main application) | ✅ Yes |
 | **3478** | UDP/TCP | CoTURN | STUN/TURN server | ✅ Yes |
 | **5349** | UDP/TCP | CoTURN | TURNS (TURN over TLS) | ✅ Yes |
-| **49152-65535** | UDP | CoTURN | TURN relay port range | ✅ Yes |
+| **49152-50151** | UDP | CoTURN | TURN relay port range | ✅ Yes |
 
 ### Exposed Ports (VPS to Reverse Proxy)
 
@@ -185,7 +185,7 @@ You **MUST** open these ports in your firewall for svaz.app to work:
 - **Direction**: Inbound
 - **Can be changed?**: ✅ Yes (via `COTURN_LISTENING_PORT` in `.env`)
 
-#### 4. **Ports 49152-65535 (TURN Relay)**
+#### 4. **Ports 49152-50151 (TURN Relay)**
 - **Purpose**: Media relay for WebRTC when direct P2P fails
 - **Protocol**: UDP
 - **Direction**: Inbound
@@ -331,7 +331,7 @@ sudo ufw allow 5349/tcp
 sudo ufw allow 5349/udp
 
 # Allow TURN relay range
-sudo ufw allow 49152:65535/udp
+sudo ufw allow 49152:50151/udp
 
 # Enable firewall
 sudo ufw enable
@@ -351,7 +351,7 @@ sudo firewall-cmd --permanent --add-port=5349/tcp
 sudo firewall-cmd --permanent --add-port=5349/udp
 
 # Allow TURN relay range
-sudo firewall-cmd --permanent --add-port=49152-65535/udp
+sudo firewall-cmd --permanent --add-port=49152-50151/udp
 
 # Reload firewall
 sudo firewall-cmd --reload
@@ -368,7 +368,7 @@ Inbound Rules:
 - Type: Custom UDP, Protocol: UDP, Port: 443, Source: 0.0.0.0/0
 - Type: Custom TCP, Protocol: TCP, Port: 3478, Source: 0.0.0.0/0
 - Type: Custom UDP, Protocol: UDP, Port: 3478, Source: 0.0.0.0/0
-- Type: Custom UDP, Protocol: UDP, Port: 49152-65535, Source: 0.0.0.0/0
+- Type: Custom UDP, Protocol: UDP, Port: 49152-50151, Source: 0.0.0.0/0
 ```
 
 #### Google Cloud Firewall
@@ -381,7 +381,7 @@ gcloud compute firewall-rules create svazapp-web \
 
 # STUN/TURN
 gcloud compute firewall-rules create svazapp-webrtc \
-  --allow tcp:3478,udp:3478,udp:49152-65535 \
+  --allow tcp:3478,udp:3478,udp:49152-50151 \
   --source-ranges 0.0.0.0/0
 ```
 
@@ -582,7 +582,7 @@ sudo lsof -i :443
 **Symptom**: Video calls fail behind NAT
 
 **Solution**:
-1. Verify UDP ports 49152-65535 are open
+1. Verify UDP ports 49152-50151 are open
 2. Test STUN: `stunclient your-domain.com 3478`
 3. Check CoTURN logs: `docker compose logs coturn`
 
@@ -590,7 +590,7 @@ sudo lsof -i :443
 
 ## Summary
 
-- **Minimum required ports**: 80, 443, 3478, 49152-65535
+- **Minimum required ports**: 80, 443, 3478, 49152-50151
 - **All ports are configurable** via `.env` and `docker-compose.yml`
 - **External reverse proxy** is fully supported (NPM, Traefik, Nginx)
 - **Firewall must allow** all required ports for WebRTC to work

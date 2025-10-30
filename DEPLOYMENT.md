@@ -47,7 +47,9 @@ We offer **two deployment scenarios**. Choose the one that fits your setup:
 **Requirements:**
 - VPS with Ubuntu 22.04+ (2GB RAM minimum)
 - Domain name pointing to your VPS IP
-- Ports 80, 443, 3478, 5349, 49152-65535 open
+- Ports 80, 443, 3478, 5349, 49152-50151 open
+
+> **Note**: The port range 49152-65535 is very large and can cause issues in some environments (especially LXC containers). The new range 49152-50151 (1000 ports) is sufficient for most use cases and avoids Docker performance issues.
 
 **Network Diagram:**
 
@@ -258,7 +260,9 @@ In this setup:
 - **Your VPS** runs svaz.app without Caddy
 - **CoTURN** ports are forwarded directly from router to VPS (bypassing NPM)
 
-**Important:** NPM cannot proxy UDP traffic (CoTURN). You must forward ports 3478, 5349, and 49152-65535 directly from your router to your VPS.
+**Important:** NPM cannot proxy UDP traffic (CoTURN). You must forward ports 3478, 5349, and 49152-50151 directly from your router to your VPS.
+
+> **Note**: The port range 49152-65535 is very large and can cause issues in some environments (especially LXC containers). The new range 49152-50151 (1000 ports) is sufficient for most use cases and avoids Docker performance issues.
 
 ---
 
@@ -402,7 +406,7 @@ Log into your router's admin panel (usually `192.168.1.1` or `192.168.0.1`).
 | 443 | NPM IP | 443 | TCP | NPM (HTTPS) |
 | 3478 | VPS IP | 3478 | TCP+UDP | CoTURN (STUN) |
 | 5349 | VPS IP | 5349 | TCP+UDP | CoTURN (TURNS) |
-| 49152-65535 | VPS IP | 49152-65535 | UDP | CoTURN (Relay) |
+| 49152-50151 | VPS IP | 49152-50151 | UDP | CoTURN (Relay) |
 
 **Example (TP-Link Router):**
 1. Go to **Advanced** → **NAT Forwarding** → **Virtual Servers**
