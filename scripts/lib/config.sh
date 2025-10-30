@@ -176,8 +176,8 @@ generate_env_file() {
     
     print_success "Environment file generated"
     
-    # Generate LiveKit configuration after .env is created
-    generate_livekit_config
+    # Generate LiveKit configuration after .env is created (moved to after env loading)
+    # generate_livekit_config
 }
 
 # Generate LiveKit configuration file from template
