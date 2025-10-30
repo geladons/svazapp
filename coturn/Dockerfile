@@ -5,7 +5,7 @@ FROM coturn/coturn:latest
 
 # Install curl and coreutils (for timeout command) for IP detection
 USER root
-RUN apt-get update && apt-get install -y curl coreutils && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y curl coreutils gettext-base && rm -rf /var/lib/apt/lists/*
 
 # Create directory for config and set permissions
 RUN mkdir -p /etc/coturn && chmod 755 /etc/coturn
