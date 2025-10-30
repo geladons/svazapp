@@ -22,8 +22,8 @@ listening-ip=0.0.0.0
 # relay-ip will be set dynamically
 
 # Relay port range
-min-port=${COTURN_MIN_PORT}
-max-port=${COTURN_MAX_PORT}
+min-port=49152
+max-port=50151
 
 # Enable verbose logging
 verbose
@@ -58,8 +58,6 @@ stun-only=false
 # Disable multicast peers
 no-multicast-peers
 
-# Disable loopback peers
-no-loopback-peers
 
 # Enable mobility
 mobility

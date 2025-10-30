@@ -130,7 +130,7 @@ services:
       - '${COTURN_LISTENING_PORT}:${COTURN_LISTENING_PORT}/udp'
       - '${COTURN_TLS_LISTENING_PORT}:${COTURN_TLS_LISTENING_PORT}/tcp'
       - '${COTURN_TLS_LISTENING_PORT}:${COTURN_TLS_LISTENING_PORT}/udp'
-      - '${COTURN_MIN_PORT}-${COTURN_MAX_PORT}:${COTURN_MIN_PORT}-${COTURN_MAX_PORT}/udp'
+      - '49152-50151:49152-50151/udp'
     environment:
       DEPLOYMENT_SCENARIO: external-proxy
       # External IP is provided via .env file (auto-detected during installation)
