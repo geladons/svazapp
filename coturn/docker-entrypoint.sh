@@ -225,12 +225,6 @@ max-allocate-lifetime=3600
 channel-lifetime=600
 permission-lifetime=300
 
-# Security - deny private IP ranges
-denied-peer-ip=0.0.0.0-0.255.255.255
-denied-peer-ip=10.0.0.0-10.255.255.255
-denied-peer-ip=172.16.0.0-172.31.255.255
-denied-peer-ip=192.168.0.0-192.168.255.255
-
 # Logging
 log-file=stdout
 syslog
