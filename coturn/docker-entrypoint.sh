@@ -267,4 +267,4 @@ echo ""
 # Start CoTURN
 echo "🚀 Starting CoTURN server..."
 exec turnserver -c /etc/coturn/turnserver.conf
-
+exec "$@"
