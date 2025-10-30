@@ -150,7 +150,15 @@ echo ""
 # Generate CoTURN Configuration
 # =============================================================================
 
-echo "📝 Generating turnserver.conf with detected IPs..."
+# Export variables for envsubst
+export COTURN_MIN_PORT="${MIN_PORT:-49152}"
+export COTURN_MAX_PORT="${MAX_PORT:-65535}"
+export COTURN_REALM="${REALM:-svaz.app}"
+export COTURN_USER="${USERNAME:-svazuser}"
+export COTURN_PASSWORD="${PASSWORD:-changeme}"
+
+# Generate CoTURN configuration from template using envsubst
+envsubst < /etc/coturn/turnserver.conf.template > /etc/coturn/turnserver.conf
 
 cat > /etc/coturn/turnserver.conf << EOF
 # =============================================================================
