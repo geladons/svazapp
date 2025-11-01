@@ -202,7 +202,7 @@ deploy_services_lxc() {
 
     # Create all containers (with timeout)
     print_info "Creating containers..."
-    timeout 120 docker compose -f "$compose_file" create || {
+    timeout 300 docker compose -f "$compose_file" create || {
         print_error "Failed to create containers"
         return 1
     }
@@ -213,7 +213,7 @@ deploy_services_lxc() {
 
     # 1. Start database
     print_info "[1/5] Starting database..."
-    timeout 30 docker start svazapp-db || {
+    timeout 60 docker start svazapp-db || {
         print_error "Failed to start database"
         return 1
     }
@@ -224,16 +224,16 @@ deploy_services_lxc() {
 
     # 2. Start LiveKit
     print_info "[2/5] Starting LiveKit..."
-    timeout 30 docker start svazapp-livekit || {
+    timeout 60 docker start svazapp-livekit || {
         print_error "Failed to start LiveKit"
         return 1
     }
-    wait_for_container_running svazapp-livekit 30
+    wait_for_container_running svazapp-livekit 60
     echo ""
 
     # 3. Start API
     print_info "[3/5] Starting API..."
-    timeout 30 docker start svazapp-api || {
+    timeout 90 docker start svazapp-api || {
         print_error "Failed to start API"
         return 1
     }
@@ -244,20 +244,20 @@ deploy_services_lxc() {
 
     # 4. Start CoTURN
     print_info "[4/5] Starting CoTURN..."
-    timeout 30 docker start svazapp-coturn || {
+    timeout 90 docker start svazapp-coturn || {
         print_error "Failed to start CoTURN"
         return 1
     }
-    wait_for_container_running svazapp-coturn 30
+    wait_for_container_running svazapp-coturn 90
     echo ""
 
     # 5. Start Frontend
     print_info "[5/5] Starting Frontend..."
-    timeout 30 docker start svazapp-frontend || {
+    timeout 60 docker start svazapp-frontend || {
         print_error "Failed to start Frontend"
         return 1
     }
-    wait_for_container_running svazapp-frontend 30
+    wait_for_container_running svazapp-frontend 60
     echo ""
 
     print_success "All services deployed successfully"
