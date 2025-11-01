@@ -25,7 +25,7 @@ validate_email() {
 # Generate random secret
 generate_secret() {
     local length="${1:-32}"
-    openssl rand -base64 "$length" | tr -d "=+/" | cut -c1-"$length"
+    openssl rand -hex "$length" | cut -c1-"$length"
 }
 
 # Check if domain DNS points to this server

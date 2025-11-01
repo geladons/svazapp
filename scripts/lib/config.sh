@@ -131,7 +131,7 @@ generate_env_file() {
     cp "$env_template" .env
     
     # Generate secrets
-    local jwt_secret=$(generate_secret 48)
+    local jwt_secret=$(generate_secret 32)
     local coturn_password=$(generate_secret 32)
     local session_secret=$(generate_secret 32)
     local livekit_api_key=$(openssl rand -hex 16)
