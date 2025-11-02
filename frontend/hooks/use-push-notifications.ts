@@ -10,10 +10,8 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/store/auth-store';
 import { createApiClient } from '@/lib/api-client';
-import type { 
-  VapidKeyResponse, 
-  PushSubscriptionData,
-  SubscribeToPushRequest 
+import type {
+ PushSubscriptionData
 } from '@/lib/api-types';
 
 /**
