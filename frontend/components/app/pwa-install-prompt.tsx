@@ -106,7 +106,7 @@ export function PWAInstallPrompt() {
   const showInstallPrompt = () => {
     if (deferredPrompt) {
       // For platforms where beforeinstallprompt works
-      (deferredPrompt as any).prompt();
+      deferredPrompt.prompt();
     } else {
       // For iOS and other platforms without beforeinstallprompt support
       // Show custom UI using pwa-install
