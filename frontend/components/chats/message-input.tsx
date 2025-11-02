@@ -14,7 +14,7 @@
 
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -22,7 +22,10 @@ import { useSocket } from '@/hooks/use-socket';
 import { useMessagesStore } from '@/store/messages-store';
 import { useAuthStore } from '@/store/auth-store';
 import { useChatsStore } from '@/store/chats-store';
+import { createApiClient } from '@/lib/api-client';
+import { useRouter } from 'next/navigation';
 import type { Message } from '@/store/messages-store';
+import type { Chat } from '@/store/chats-store';
 
 interface MessageInputProps {
   chatId: string;
@@ -47,6 +50,32 @@ export function MessageInput({ chatId, participantId }: MessageInputProps) {
   const { emit } = useSocket();
   const addMessage = useMessagesStore((state) => state.addMessage);
   const updateLastMessage = useChatsStore((state) => state.updateLastMessage);
+  const addOrUpdateChat = useChatsStore((state) => state.addOrUpdateChat);
+  const router = useRouter();
+ const tokens = useAuthStore((state) => state.tokens);
+
+  // Create API client instance
+  const apiClient = useMemo(() => {
+    const client = createApiClient({
+      baseUrl: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:80/api',
+      onTokenRefresh: (accessToken, refreshToken) => {
+        if (user) {
+          useAuthStore.getState().setAuth(user, { accessToken, refreshToken });
+        }
+      },
+      onAuthError: () => {
+        useAuthStore.getState().clearAuth();
+        router.push('/login');
+      },
+    });
+
+    // Set tokens if available
+    if (tokens) {
+      client.setTokens(tokens.accessToken, tokens.refreshToken);
+    }
+
+    return client;
+  }, [user, tokens, router]);
 
   /**
    * Handle typing indicator
@@ -85,36 +114,77 @@ export function MessageInput({ chatId, participantId }: MessageInputProps) {
     if (!message.trim() || !user) return;
 
     const trimmedMessage = message.trim();
-    const messageId = `${user.id}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const timestamp = new Date();
 
-    // Create message object
-    const newMessage: Message = {
-      id: messageId,
-      senderId: user.id,
-      receiverId: participantId,
-      content: trimmedMessage,
-      type: 'TEXT',
-      status: 'SENDING',
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      localOnly: false,
-    };
-
     try {
+      // Check if chat exists in store (if chatId is not a valid chat, it might be a participantId)
+      const existingChat = useChatsStore.getState().chats.find(chat => chat.id === chatId);
+      let actualChatId = chatId;
+
+      // If no existing chat found, create a new chat
+      if (!existingChat) {
+        // Create chat via API
+        const response = await apiClient.createChat({ participantId });
+        const newChat = response.chat;
+
+        // Convert ChatWithParticipant to Chat format for the store
+        const chatForStore: Chat = {
+          id: newChat.id,
+          createdAt: new Date(newChat.createdAt),
+          updatedAt: new Date(newChat.updatedAt),
+          lastMessage: newChat.lastMessage,
+          lastMessageAt: newChat.lastMessageAt ? new Date(newChat.lastMessageAt) : null,
+          lastMessageBy: newChat.lastMessageBy,
+          unreadCount: newChat.unreadCount,
+          participant: {
+            id: newChat.participant.id,
+            email: newChat.participant.email,
+            username: newChat.participant.username,
+            displayName: newChat.participant.displayName,
+            avatarUrl: newChat.participant.avatarUrl,
+            isOnline: newChat.participant.isOnline,
+            lastSeenAt: new Date(newChat.participant.lastSeenAt),
+          },
+        };
+
+        // Add new chat to store
+        addOrUpdateChat(chatForStore);
+
+        // Update the actual chat ID to use the new chat ID
+        actualChatId = newChat.id;
+
+        // Update URL to reflect new chat ID
+        router.replace(`/chats/${newChat.id}`);
+      }
+
+      const messageId = `${user.id}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+      // Create message object
+      const newMessage: Message = {
+        id: messageId,
+        senderId: user.id,
+        receiverId: participantId,
+        content: trimmedMessage,
+        type: 'TEXT',
+        status: 'SENDING',
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        localOnly: false,
+      };
+
       // Save to Dexie.js
       await addMessage(newMessage);
 
       // Send via Socket.io
       emit('message-send', {
         to: participantId,
-        chatId,
+        chatId: actualChatId,
         message: trimmedMessage,
         timestamp: timestamp.toISOString(),
       });
 
       // Update chat's last message in chats-store
-      updateLastMessage(chatId, trimmedMessage, user.id);
+      updateLastMessage(actualChatId, trimmedMessage, user.id);
 
       // Update message status to SENT
       // (In real app, this would be done when server confirms receipt)
@@ -128,7 +198,7 @@ export function MessageInput({ chatId, participantId }: MessageInputProps) {
       // Stop typing indicator
       if (isTyping) {
         setIsTyping(false);
-        emit('typing-stop', { to: participantId, chatId });
+        emit('typing-stop', { to: participantId, chatId: actualChatId });
       }
 
       // Focus textarea
@@ -136,7 +206,10 @@ export function MessageInput({ chatId, participantId }: MessageInputProps) {
     } catch (error) {
       console.error('Failed to send message:', error);
       // Update message status to FAILED
-      useMessagesStore.getState().updateMessageStatus(messageId, 'FAILED');
+      if (user) {
+        const messageId = `${user.id}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+        useMessagesStore.getState().updateMessageStatus(messageId, 'FAILED');
+      }
     }
   };
 

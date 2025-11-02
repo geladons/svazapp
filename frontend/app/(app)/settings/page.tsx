@@ -12,20 +12,21 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Settings as SettingsIcon,
-  Bell,
-  Lock,
-  Palette,
-  LogOut,
-  Trash2,
-  Moon,
-  Sun,
-  Shield,
+ Settings as SettingsIcon,
+ Bell,
+ Lock,
+ Palette,
+ LogOut,
+ Trash2,
+Moon,
+ Sun,
+ Shield,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/store/auth-store';
 import { createApiClient } from '@/lib/api-client';
+import { usePushNotifications } from '@/hooks/use-push-notifications';
 
 /**
  * Settings interface
@@ -298,6 +299,9 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Push Notifications Section */}
+        <PushNotificationsSection />
+
         {/* Privacy Section */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
@@ -435,6 +439,77 @@ export default function SettingsPage() {
               </div>
             )}
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Push Notifications Section Component
+ */
+function PushNotificationsSection() {
+  const {
+    permission,
+    isSupported,
+    isSubscribed,
+    isLoading,
+    error,
+    requestPermission
+  } = usePushNotifications();
+
+  const getStatusText = () => {
+    if (!isSupported) return 'Push notifications are not supported in this browser';
+    if (permission === 'denied') return 'Permission denied. Please enable notifications in browser settings.';
+    if (isSubscribed) return 'You are subscribed to push notifications';
+    if (permission === 'granted') return 'Push notifications are enabled but not subscribed';
+    return 'Enable push notifications to receive alerts when the app is closed';
+  };
+
+  const getStatusColor = () => {
+    if (!isSupported || permission === 'denied') return 'text-red-600 dark:text-red-400';
+    if (isSubscribed) return 'text-green-600 dark:text-green-400';
+    return 'text-gray-600 dark:text-gray-400';
+  };
+
+  const getButtonText = () => {
+    if (!isSupported) return 'Not Supported';
+    if (permission === 'denied') return 'Enable in Browser';
+    if (isSubscribed) return 'Enabled';
+    return permission === 'granted' ? 'Subscribe' : 'Enable Notifications';
+  };
+
+  const isButtonDisabled = !isSupported || permission === 'denied' || isLoading || isSubscribed;
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center gap-2">
+          <Bell className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Push Notifications
+          </h2>
+        </div>
+      </div>
+      <div className="p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <Label className="text-base font-medium">Enable Push Notifications</Label>
+            <p className={`text-sm ${getStatusColor()}`}>
+              {getStatusText()}
+            </p>
+            {error && (
+              <p className="text-sm text-red-600 dark:text-red-400 mt-1">{error}</p>
+            )}
+          </div>
+          <Button
+            onClick={requestPermission}
+            disabled={isButtonDisabled}
+            variant={isSubscribed ? "default" : "outline"}
+            className={isSubscribed ? "bg-green-600 hover:bg-green-700" : ""}
+          >
+            {isLoading ? 'Enabling...' : getButtonText()}
+          </Button>
         </div>
       </div>
     </div>

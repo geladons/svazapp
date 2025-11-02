@@ -175,14 +175,67 @@ async function handleNotificationClick(event) {
 
 // Event Listeners
 
+// Precache URLs - add essential resources for offline functionality
+const PRECACHE_URLS = [
+  '/',
+  '/manifest.json',
+  '/icon-192x192.png',
+  '/icon-512x512.png',
+  '/_next/static/chunks/app/layout-3275ca0684f6b05.js',
+  '/_next/static/chunks/app/(app)/layout-dbd76ffbdb1cd70d.js',
+  '/_next/static/chunks/app/page-bc82537d6ccb0e89.js',
+  '/_next/static/chunks/app/(app)/home/page-ff28eee1fa828a19.js',
+  '/_next/static/css/c384c4cae70fb27f.css',
+];
+
+const PRECACHE = 'precache-v1';
+const RUNTIME = 'runtime';
+
 self.addEventListener('install', (event) => {
   console.log('[P2P SW] Installing...');
-  self.skipWaiting();
+  
+  // Precache essential resources
+  event.waitUntil(
+    caches.open(PRECACHE)
+      .then((cache) => {
+        return cache.addAll(PRECACHE_URLS);
+      })
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (event) => {
   console.log('[P2P SW] Activating...');
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    self.clients.claim()
+  );
+});
+
+// Add fetch event listener to handle navigation requests
+self.addEventListener('fetch', (event) => {
+  // Only handle navigation requests (page loads)
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      caches.match(event.request)
+        .then((response) => {
+          // Return cached response if available
+          if (response) {
+            console.log('[P2P SW] Serving from cache:', event.request.url);
+            return response;
+          }
+          
+          // If not in cache, fetch from network
+          console.log('[P2P SW] Fetching from network:', event.request.url);
+          return fetch(event.request)
+            .catch((error) => {
+              console.error('[P2P SW] Network request failed:', error);
+              
+              // If network request fails, try to serve fallback from cache
+              return caches.match('/');
+            });
+        })
+    );
+ }
 });
 
 self.addEventListener('message', (event) => {

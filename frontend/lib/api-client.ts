@@ -17,6 +17,11 @@ import type {
   ContactStatus,
   GetChatsResponse,
   GetCallHistoryResponse,
+  ChatWithParticipant,
+  VapidKeyResponse,
+  SubscribeToPushRequest,
+  SubscribeToPushResponse,
+  UnsubscribeFromPushRequest,
 } from './api-types';
 
 /**
@@ -181,38 +186,38 @@ export class ApiClient {
   }
 
   /**
-   * GET request
-   */
-  private async get<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, { method: 'GET' });
-  }
-
-  /**
-   * POST request
-   */
-  private async post<T>(endpoint: string, body?: unknown): Promise<T> {
-    return this.request<T>(endpoint, {
-      method: 'POST',
-      body: body ? JSON.stringify(body) : undefined,
-    });
-  }
-
-  /**
-   * DELETE request
-   */
-  private async delete<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, { method: 'DELETE' });
-  }
-
-  /**
-   * PATCH request
-   */
-  private async patch<T>(endpoint: string, body?: unknown): Promise<T> {
-    return this.request<T>(endpoint, {
-      method: 'PATCH',
-      body: body ? JSON.stringify(body) : undefined,
-    });
-  }
+     * GET request
+     */
+    public async get<T>(endpoint: string): Promise<T> {
+      return this.request<T>(endpoint, { method: 'GET' });
+    }
+ 
+    /**
+     * POST request
+     */
+    public async post<T>(endpoint: string, body?: unknown): Promise<T> {
+      return this.request<T>(endpoint, {
+        method: 'POST',
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    }
+ 
+    /**
+     * DELETE request
+     */
+    public async delete<T>(endpoint: string): Promise<T> {
+      return this.request<T>(endpoint, { method: 'DELETE' });
+    }
+ 
+    /**
+     * PATCH request
+     */
+    public async patch<T>(endpoint: string, body?: unknown): Promise<T> {
+      return this.request<T>(endpoint, {
+        method: 'PATCH',
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    }
 
   // ==================== Auth API ====================
 
@@ -369,6 +374,13 @@ export class ApiClient {
     return this.delete<{ message: string }>(`/chats/${chatId}`);
   }
 
+  /**
+   * Create a new chat with a participant
+   */
+  async createChat(data: { participantId: string }): Promise<{ chat: ChatWithParticipant }> {
+    return this.post<{ chat: ChatWithParticipant }>('/chats', data);
+  }
+
   // ==================== Call API ====================
 
   /**
@@ -388,22 +400,49 @@ export class ApiClient {
   // ==================== LiveKit API ====================
 
   /**
-   * Generate LiveKit access token
-   */
-  async generateLiveKitToken(
-    data: LiveKitTokenRequest
-  ): Promise<LiveKitTokenResponse> {
-    return this.post<LiveKitTokenResponse>('/livekit/token', data);
-  }
-
-  // ==================== Health Check ====================
-
-  /**
-   * Check API health
-   */
-  async healthCheck(): Promise<{ status: string }> {
-    return this.get<{ status: string }>('/health');
-  }
+     * Generate LiveKit access token
+     */
+    async generateLiveKitToken(
+      data: LiveKitTokenRequest
+    ): Promise<LiveKitTokenResponse> {
+      return this.post<LiveKitTokenResponse>('/livekit/token', data);
+    }
+ 
+    // ==================== Push Notifications API ====================
+ 
+    /**
+     * Get VAPID public key
+     */
+    async getVapidKey(): Promise<VapidKeyResponse> {
+      return this.get<VapidKeyResponse>('/notifications/vapid-key');
+    }
+ 
+    /**
+     * Subscribe to push notifications
+     */
+    async subscribeToPush(
+      data: SubscribeToPushRequest
+    ): Promise<SubscribeToPushResponse> {
+      return this.post<SubscribeToPushResponse>('/notifications/subscribe', data);
+    }
+ 
+    /**
+     * Unsubscribe from push notifications
+     */
+    async unsubscribeFromPush(
+      data: UnsubscribeFromPushRequest
+    ): Promise<{ message: string }> {
+      return this.post<{ message: string }>('/notifications/unsubscribe', data);
+    }
+ 
+    // ==================== Health Check ====================
+ 
+    /**
+     * Check API health
+     */
+    async healthCheck(): Promise<{ status: string }> {
+      return this.get<{ status: string }>('/health');
+    }
 }
 
 /**

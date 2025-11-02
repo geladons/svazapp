@@ -304,5 +304,49 @@ export interface CallWithParticipant {
  * Get call history response
  */
 export interface GetCallHistoryResponse {
-  calls: CallWithParticipant[];
+ calls: CallWithParticipant[];
+}
+
+// ==================== Push Notifications Types ====================
+
+/**
+* VAPID key response
+*/
+export interface VapidKeyResponse {
+ publicKey: string;
+}
+
+/**
+* Push subscription data
+*/
+export interface PushSubscriptionData {
+ endpoint: string;
+ keys: {
+   p256dh: string;
+   auth: string;
+ };
+}
+
+/**
+* Subscribe to push notifications request
+*/
+export interface SubscribeToPushRequest {
+ subscription: PushSubscriptionData;
+}
+
+/**
+* Subscribe to push notifications response
+*/
+export interface SubscribeToPushResponse {
+ id: string;
+ userId: string;
+ endpoint: string;
+ createdAt: string;
+}
+
+/**
+* Unsubscribe from push notifications request
+*/
+export interface UnsubscribeFromPushRequest {
+ endpoint: string;
 }

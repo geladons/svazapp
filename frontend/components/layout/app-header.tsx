@@ -1,6 +1,7 @@
 'use client';
 
-import { Search, UserCircle2, Bell } from 'lucide-react';
+import { Search, UserCircle2, Bell, Settings } from 'lucide-react';
+import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -90,6 +91,17 @@ export function AppHeader() {
             )}
           </div>
 
+          {/* Settings button */}
+          <Link href="/settings">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all duration-200 hover:scale-110"
+              aria-label="Settings"
+            >
+              <Settings className="h-5 w-5" />
+            </Button>
+          </Link>
           {/* Profile button */}
           <Button
             variant="ghost"
