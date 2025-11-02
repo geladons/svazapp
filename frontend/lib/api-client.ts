@@ -66,14 +66,17 @@ export class ApiClient {
   /**
    * Make an HTTP request
    */
-  private async request<T>(
+ private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
+    const headers: Record<string, string> = {};
+
+    // Add Content-Type header only if there's a body in the request
+    if (options.body) {
+      headers['Content-Type'] = 'application/json';
+    }
 
     // Add existing headers
     if (options.headers) {
