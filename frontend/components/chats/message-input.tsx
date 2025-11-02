@@ -117,8 +117,8 @@ export function MessageInput({ chatId, participantId }: MessageInputProps) {
     const timestamp = new Date();
 
     try {
-      // Check if chat exists in store (if chatId is not a valid chat, it might be a participantId)
-      const existingChat = useChatsStore.getState().chats.find(chat => chat.id === chatId);
+      // Check if chat exists in store by looking for a chat with the participant
+      const existingChat = useChatsStore.getState().chats.find(chat => chat.participant.id === participantId);
       let actualChatId = chatId;
 
       // If no existing chat found, create a new chat
@@ -153,44 +153,83 @@ export function MessageInput({ chatId, participantId }: MessageInputProps) {
         // Update the actual chat ID to use the new chat ID
         actualChatId = newChat.id;
 
-        // Update URL to reflect new chat ID
+        // Send via Socket.io first before updating URL
+        const messageId = `${user.id}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+        // Create message object
+        const newMessage: Message = {
+          id: messageId,
+          senderId: user.id,
+          receiverId: participantId,
+          content: trimmedMessage,
+          type: 'TEXT',
+          status: 'SENDING',
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          localOnly: false,
+        };
+
+        // Save to Dexie.js
+        await addMessage(newMessage);
+
+        // Send via Socket.io
+        emit('message-send', {
+          to: participantId,
+          chatId: actualChatId,
+          message: trimmedMessage,
+          timestamp: timestamp.toISOString(),
+        });
+
+        // Update chat's last message in chats-store
+        updateLastMessage(actualChatId, trimmedMessage, user.id);
+
+        // Update message status to SENT
+        // (In real app, this would be done when server confirms receipt)
+        setTimeout(() => {
+          useMessagesStore.getState().updateMessageStatus(messageId, 'SENT');
+        }, 100);
+
+        // Update URL to reflect new chat ID only after sending the message
         router.replace(`/chats/${newChat.id}`);
+      } else {
+        // If chat exists, use its ID and send the message
+        actualChatId = existingChat.id;
+
+        const messageId = `${user.id}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+        // Create message object
+        const newMessage: Message = {
+          id: messageId,
+          senderId: user.id,
+          receiverId: participantId,
+          content: trimmedMessage,
+          type: 'TEXT',
+          status: 'SENDING',
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          localOnly: false,
+        };
+
+        // Save to Dexie.js
+        await addMessage(newMessage);
+
+        // Send via Socket.io
+        emit('message-send', {
+          to: participantId,
+          chatId: actualChatId,
+          message: trimmedMessage,
+          timestamp: timestamp.toISOString(),
+        });
+
+        // Update chat's last message in chats-store
+        updateLastMessage(actualChatId, trimmedMessage, user.id);
+
+        // Update message status to SENT
+        // (In real app, this would be done when server confirms receipt)
+        setTimeout(() => {
+          useMessagesStore.getState().updateMessageStatus(messageId, 'SENT');
+        }, 100);
       }
-
-      const messageId = `${user.id}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-
-      // Create message object
-      const newMessage: Message = {
-        id: messageId,
-        senderId: user.id,
-        receiverId: participantId,
-        content: trimmedMessage,
-        type: 'TEXT',
-        status: 'SENDING',
-        createdAt: timestamp,
-        updatedAt: timestamp,
-        localOnly: false,
-      };
-
-      // Save to Dexie.js
-      await addMessage(newMessage);
-
-      // Send via Socket.io
-      emit('message-send', {
-        to: participantId,
-        chatId: actualChatId,
-        message: trimmedMessage,
-        timestamp: timestamp.toISOString(),
-      });
-
-      // Update chat's last message in chats-store
-      updateLastMessage(actualChatId, trimmedMessage, user.id);
-
-      // Update message status to SENT
-      // (In real app, this would be done when server confirms receipt)
-      setTimeout(() => {
-        useMessagesStore.getState().updateMessageStatus(messageId, 'SENT');
-      }, 100);
 
       // Clear input
       setMessage('');
